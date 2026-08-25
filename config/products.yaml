@@ -1,0 +1,93 @@
+products:
+  - product_id: Milk_Product_A
+    pack_size_units: 4
+    open_shelf_life_days: 7
+    unopened_shelf_life_days: 90
+    demand_level: high
+    high_demand_days:
+      - Monday
+    primary_risk: stockout
+    provisional_fields: []
+  - product_id: Milk_Product_B
+    pack_size_units: 6
+    open_shelf_life_days: 7
+    unopened_shelf_life_days: 60
+    demand_level: high
+    high_demand_days:
+      - Monday
+      - Tuesday
+      - Wednesday
+    primary_risk: stockout
+    provisional_fields: []
+  - product_id: Whole_Milk
+    pack_size_units: 4
+    open_shelf_life_days: 3
+    unopened_shelf_life_days: 60
+    demand_level: high
+    high_demand_days: []
+    primary_risk: unknown
+    provisional_fields:
+      - high_demand_days
+      - primary_risk
+  - product_id: Fruit_Refresher_A
+    pack_size_units: 8
+    open_shelf_life_days: 7
+    unopened_shelf_life_days: 60
+    demand_level: high
+    high_demand_days:
+      - Tuesday
+      - Wednesday
+    primary_risk: stockout
+    provisional_fields: []
+  - product_id: Fruit_Refresher_B
+    pack_size_units: 8
+    open_shelf_life_days: 7
+    unopened_shelf_life_days: 60
+    demand_level: high
+    high_demand_days:
+      - Tuesday
+      - Wednesday
+    primary_risk: stockout
+    provisional_fields: []
+  - product_id: Cold_Foam_A
+    pack_size_units: 6
+    open_shelf_life_days: 14
+    unopened_shelf_life_days: 60
+    demand_level: high
+    high_demand_days: []
+    primary_risk: unknown
+    provisional_fields:
+      - high_demand_days
+      - primary_risk
+  - product_id: Whipped_Topping
+    pack_size_units: 6
+    open_shelf_life_days: 14
+    unopened_shelf_life_days: 60
+    demand_level: high
+    high_demand_days: []
+    primary_risk: unknown
+    provisional_fields:
+      - pack_size_units
+      - open_shelf_life_days
+      - unopened_shelf_life_days
+      - high_demand_days
+      - primary_risk
+  - product_id: Skim_Milk
+    pack_size_units: 4
+    open_shelf_life_days: 3
+    unopened_shelf_life_days: 60
+    demand_level: low
+    high_demand_days: []
+    primary_risk: waste
+    provisional_fields:
+      - high_demand_days
+  - product_id: Oat_Beverage
+    pack_size_units: 4
+    open_shelf_life_days: 7
+    unopened_shelf_life_days: 90
+    demand_level: unknown
+    high_demand_days: []
+    primary_risk: waste
+    provisional_fields:
+      - demand_level
+      - high_demand_days
