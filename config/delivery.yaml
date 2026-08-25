@@ -1,0 +1,12 @@
+delivery:
+  cycle_length_days: 14
+  delivery_weekday: Tuesday
+  delivery_window:
+    start_time: "11:00"
+    end_time: "12:00"
+    approximate: true
+  full_pack_ordering_required: true
+  require_pack_size_constraints: true
+  notes:
+    - These values are generalized synthetic modeling assumptions.
+    - These values are not private operational guidance.

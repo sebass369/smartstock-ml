@@ -8,13 +8,13 @@ This repository must use only synthetic and anonymized data. Do not add employer
 
 ## Current project status
 
-The project currently contains only the Phase 1 Python repository foundation. It does not yet contain forecasting, machine-learning functionality, synthetic-data generation, inventory simulation, ordering logic, dashboards, deployment, or Google Colab analysis.
+The project currently contains the Phase 1 Python repository foundation and Phase 2 validated synthetic product and delivery configuration. It does not yet contain forecasting, machine-learning functionality, synthetic-data generation, inventory simulation, ordering logic, dashboards, deployment, or Google Colab analysis.
 
 ## Planned repository structure
 
 - `src/smartstock/`: reusable Python package code.
 - `tests/`: automated tests.
-- `config/`: future synthetic modeling configuration.
+- `config/`: validated synthetic product and delivery configuration.
 - `docs/`: future assumptions, privacy rules, data dictionary, and project decisions.
 - `notebooks/`: future Google Colab demonstrations that import reusable code.
 - `data/generated/`: future reproducible generated synthetic data.
@@ -43,7 +43,6 @@ python -m pytest -q
 
 ## Current limitations
 
-- No product configuration values are implemented yet.
 - No synthetic datasets are generated yet.
 - No inventory simulation or ordering recommendations are implemented yet.
 - No forecasting, optimization, dashboard, deployment, or notebook analysis is implemented yet.
