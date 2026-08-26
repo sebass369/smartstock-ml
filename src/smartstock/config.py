@@ -28,6 +28,14 @@ ALLOWED_WEEKDAYS = {
     "Saturday",
     "Sunday",
 }
+ELIGIBLE_PROVISIONAL_FIELDS = {
+    "pack_size_units",
+    "open_shelf_life_days",
+    "unopened_shelf_life_days",
+    "demand_level",
+    "high_demand_days",
+    "primary_risk",
+}
 
 PRODUCT_REQUIRED_FIELDS = {
     "product_id",
@@ -53,7 +61,12 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     """Load a YAML file safely and return a dictionary."""
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as yaml_file:
-        data = yaml.safe_load(yaml_file)
+        try:
+            data = yaml.safe_load(yaml_file)
+        except yaml.YAMLError as exc:
+            raise ValueError(
+                f"Malformed YAML configuration: {config_path}"
+            ) from exc
 
     if not isinstance(data, dict):
         raise ValueError(f"YAML file must contain a mapping: {config_path}")
@@ -117,8 +130,13 @@ def validate_delivery_config(config: dict[str, Any]) -> None:
             f"Delivery configuration is missing fields: {sorted(missing_fields)}."
         )
 
-    if delivery["cycle_length_days"] != 14:
-        raise ValueError("Delivery cycle length must be 14 days.")
+    cycle_length_days = delivery["cycle_length_days"]
+    if (
+        isinstance(cycle_length_days, bool)
+        or not isinstance(cycle_length_days, int)
+        or cycle_length_days != 14
+    ):
+        raise ValueError("cycle_length_days must be the integer 14.")
     if delivery["delivery_weekday"] != "Tuesday":
         raise ValueError("Delivery weekday must be Tuesday.")
     if delivery["full_pack_ordering_required"] is not True:
@@ -132,6 +150,17 @@ def validate_delivery_config(config: dict[str, Any]) -> None:
     for field_name in ("start_time", "end_time", "approximate"):
         if field_name not in delivery_window:
             raise ValueError(f"Delivery window is missing {field_name}.")
+
+    start_time = delivery_window["start_time"]
+    if not isinstance(start_time, str) or start_time != "11:00":
+        raise ValueError("Delivery window start_time must be the string '11:00'.")
+
+    end_time = delivery_window["end_time"]
+    if not isinstance(end_time, str) or end_time != "12:00":
+        raise ValueError("Delivery window end_time must be the string '12:00'.")
+
+    if delivery_window["approximate"] is not True:
+        raise ValueError("Delivery window approximate must be the Boolean true.")
 
 
 def _validate_product(product: Any) -> None:
@@ -165,13 +194,30 @@ def _validate_product(product: Any) -> None:
         if weekday not in ALLOWED_WEEKDAYS:
             raise ValueError(f"Invalid high-demand weekday for {product_id}: {weekday}.")
 
-    if not isinstance(product["provisional_fields"], list):
+    provisional_fields = product["provisional_fields"]
+    if not isinstance(provisional_fields, list):
         raise ValueError(f"Provisional fields must be a list for {product_id}.")
+
+    seen_provisional_fields: set[str] = set()
+    for field_name in provisional_fields:
+        if not isinstance(field_name, str):
+            raise ValueError(
+                f"Provisional field entries must be strings for {product_id}."
+            )
+        if field_name not in ELIGIBLE_PROVISIONAL_FIELDS:
+            raise ValueError(
+                f"Unknown provisional field for {product_id}: {field_name}."
+            )
+        if field_name in seen_provisional_fields:
+            raise ValueError(
+                f"Duplicate provisional field for {product_id}: {field_name}."
+            )
+        seen_provisional_fields.add(field_name)
 
 
 def _validate_positive_integer(product: dict[str, Any], field_name: str) -> None:
     value = product[field_name]
-    if not isinstance(value, int) or value <= 0:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError(
             f"{field_name} must be a positive integer for {product['product_id']}."
         )
