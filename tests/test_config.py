@@ -2,6 +2,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+import yaml
 
 from smartstock.config import (
     ALLOWED_DEMAND_LEVELS,
@@ -10,6 +11,8 @@ from smartstock.config import (
     APPROVED_PRODUCT_IDS,
     load_delivery_config,
     load_products_config,
+    load_yaml,
+    validate_delivery_config,
     validate_products_config,
 )
 
@@ -129,3 +132,156 @@ def test_invalid_weekday_raises_value_error():
 
     with pytest.raises(ValueError, match="Invalid high-demand weekday"):
         validate_products_config(config)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("pack_size_units", True),
+        ("open_shelf_life_days", True),
+        ("unopened_shelf_life_days", False),
+        ("pack_size_units", 4.0),
+    ],
+)
+def test_product_integer_fields_reject_non_integer_values(
+    field_name, invalid_value
+):
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    config["products"][0][field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=field_name):
+        validate_products_config(config)
+
+
+@pytest.mark.parametrize("invalid_value", [14.0, True, False, "14"])
+def test_delivery_cycle_rejects_non_integer_values(invalid_value):
+    config = deepcopy(load_delivery_config(DELIVERY_PATH))
+    config["delivery"]["cycle_length_days"] = invalid_value
+
+    with pytest.raises(ValueError, match="cycle_length_days"):
+        validate_delivery_config(config)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("start_time", "10:00"),
+        ("start_time", 1100),
+        ("end_time", "13:00"),
+        ("end_time", 1200),
+    ],
+)
+def test_delivery_window_rejects_invalid_times(field_name, invalid_value):
+    config = deepcopy(load_delivery_config(DELIVERY_PATH))
+    config["delivery"]["delivery_window"][field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=field_name):
+        validate_delivery_config(config)
+
+
+@pytest.mark.parametrize("invalid_value", [False, 1, "true", "yes"])
+def test_delivery_window_rejects_invalid_approximate_values(invalid_value):
+    config = deepcopy(load_delivery_config(DELIVERY_PATH))
+    config["delivery"]["delivery_window"]["approximate"] = invalid_value
+
+    with pytest.raises(ValueError, match="approximate"):
+        validate_delivery_config(config)
+
+
+def test_invalid_demand_level_raises_value_error():
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    config["products"][0]["demand_level"] = "medium"
+
+    with pytest.raises(ValueError, match="Invalid demand level"):
+        validate_products_config(config)
+
+
+def test_invalid_primary_risk_raises_value_error():
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    config["products"][0]["primary_risk"] = "spoilage"
+
+    with pytest.raises(ValueError, match="Invalid primary risk"):
+        validate_products_config(config)
+
+
+def test_duplicate_product_ids_raise_value_error():
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    config["products"][1]["product_id"] = config["products"][0]["product_id"]
+
+    with pytest.raises(ValueError, match="Product IDs must be unique"):
+        validate_products_config(config)
+
+
+def test_missing_required_product_field_raises_value_error():
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    del config["products"][0]["pack_size_units"]
+
+    with pytest.raises(ValueError, match="missing fields.*pack_size_units"):
+        validate_products_config(config)
+
+
+def test_missing_required_delivery_field_raises_value_error():
+    config = deepcopy(load_delivery_config(DELIVERY_PATH))
+    del config["delivery"]["delivery_weekday"]
+
+    with pytest.raises(ValueError, match="missing fields.*delivery_weekday"):
+        validate_delivery_config(config)
+
+
+@pytest.mark.parametrize("field_name", ["start_time", "end_time", "approximate"])
+def test_missing_delivery_window_field_raises_value_error(field_name):
+    config = deepcopy(load_delivery_config(DELIVERY_PATH))
+    del config["delivery"]["delivery_window"][field_name]
+
+    with pytest.raises(ValueError, match=f"missing {field_name}"):
+        validate_delivery_config(config)
+
+
+@pytest.mark.parametrize(
+    "field_name", ["not_a_product_field", "product_id", "provisional_fields"]
+)
+def test_invalid_provisional_field_name_raises_value_error(field_name):
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    config["products"][0]["provisional_fields"] = [field_name]
+
+    with pytest.raises(ValueError, match="Unknown provisional field"):
+        validate_products_config(config)
+
+
+def test_duplicate_provisional_field_names_raise_value_error():
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    config["products"][0]["provisional_fields"] = [
+        "demand_level",
+        "demand_level",
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate provisional field"):
+        validate_products_config(config)
+
+
+def test_non_string_provisional_field_entry_raises_value_error():
+    config = deepcopy(load_products_config(PRODUCTS_PATH))
+    config["products"][0]["provisional_fields"] = [1]
+
+    with pytest.raises(ValueError, match="must be strings"):
+        validate_products_config(config)
+
+
+@pytest.mark.parametrize("yaml_text", ["", "- products"])
+def test_yaml_top_level_must_be_a_mapping(tmp_path, yaml_text):
+    config_path = tmp_path / "invalid.yaml"
+    config_path.write_text(yaml_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must contain a mapping"):
+        load_yaml(config_path)
+
+
+def test_malformed_yaml_raises_project_value_error(tmp_path):
+    config_path = tmp_path / "malformed.yaml"
+    config_path.write_text("products: [\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Malformed YAML configuration") as exc_info:
+        load_yaml(config_path)
+
+    assert str(config_path) in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, yaml.YAMLError)
