@@ -10,23 +10,28 @@ from smartstock.config import (
     ALLOWED_WEEKDAYS,
     APPROVED_PRODUCT_IDS,
     load_delivery_config,
+    load_generation_config,
     load_products_config,
     load_yaml,
     validate_delivery_config,
+    validate_generation_config,
     validate_products_config,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS_PATH = PROJECT_ROOT / "config" / "products.yaml"
 DELIVERY_PATH = PROJECT_ROOT / "config" / "delivery.yaml"
+GENERATION_PATH = PROJECT_ROOT / "config" / "generation.yaml"
 
 
 def test_real_synthetic_configuration_loads_successfully():
     products_config = load_products_config(PRODUCTS_PATH)
     delivery_config = load_delivery_config(DELIVERY_PATH)
+    generation_config = load_generation_config(GENERATION_PATH)
 
     assert "products" in products_config
     assert "delivery" in delivery_config
+    assert "generation" in generation_config
 
 
 def test_exactly_nine_approved_product_aliases_are_present():
@@ -82,7 +87,9 @@ def test_provisional_fields_are_correctly_represented():
         "primary_risk",
     ]
     assert "primary_risk" in products["Cold_Foam_A"]["provisional_fields"]
-    assert "demand_level" in products["Oat_Beverage"]["provisional_fields"]
+    assert products["Oat_Beverage"]["demand_level"] == "low"
+    assert "demand_level" not in products["Oat_Beverage"]["provisional_fields"]
+    assert "high_demand_days" in products["Oat_Beverage"]["provisional_fields"]
 
 
 def test_delivery_cycle_is_fourteen_days_and_tuesday_based():
@@ -100,6 +107,21 @@ def test_full_pack_and_pack_size_rules_are_enabled():
 
     assert delivery["full_pack_ordering_required"] is True
     assert delivery["require_pack_size_constraints"] is True
+
+
+def test_generation_configuration_contains_approved_values():
+    generation = load_generation_config(GENERATION_PATH)["generation"]
+
+    assert generation == {
+        "start_date": "2025-01-07",
+        "duration_days": 56,
+        "default_seed": 42,
+        "demand_ranges": {
+            "low": {"minimum": 0, "maximum": 2},
+            "high": {"minimum": 3, "maximum": 6},
+        },
+        "high_demand_day_adjustment": 1,
+    }
 
 
 def test_unknown_product_id_raises_value_error():
@@ -267,6 +289,153 @@ def test_non_string_provisional_field_entry_raises_value_error():
         validate_products_config(config)
 
 
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "start_date",
+        "duration_days",
+        "default_seed",
+        "demand_ranges",
+        "high_demand_day_adjustment",
+    ],
+)
+def test_missing_generation_field_raises_value_error(field_name):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    del config["generation"][field_name]
+
+    with pytest.raises(ValueError, match=f"missing fields.*{field_name}"):
+        validate_generation_config(config)
+
+
+def test_unknown_generation_field_raises_value_error():
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["unknown_setting"] = 1
+
+    with pytest.raises(ValueError, match="unknown fields.*unknown_setting"):
+        validate_generation_config(config)
+
+
+def test_unknown_generation_top_level_field_raises_value_error():
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["other_generation"] = {}
+
+    with pytest.raises(ValueError, match="unknown fields.*other_generation"):
+        validate_generation_config(config)
+
+
+@pytest.mark.parametrize("invalid_value", ["not-a-date", "2025-02-30", 20250107])
+def test_invalid_generation_start_date_raises_value_error(invalid_value):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["start_date"] = invalid_value
+
+    with pytest.raises(ValueError, match="start_date"):
+        validate_generation_config(config)
+
+
+def test_generation_start_date_must_be_tuesday():
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["start_date"] = "2025-01-08"
+
+    with pytest.raises(ValueError, match="Tuesday"):
+        validate_generation_config(config)
+
+
+@pytest.mark.parametrize("invalid_value", [True, False, 56.0, 0, -1])
+def test_generation_duration_must_be_a_positive_integer(invalid_value):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["duration_days"] = invalid_value
+
+    with pytest.raises(ValueError, match="duration_days"):
+        validate_generation_config(config)
+
+
+@pytest.mark.parametrize("invalid_value", [True, False, 42.0, "42"])
+def test_generation_seed_must_be_an_integer(invalid_value):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["default_seed"] = invalid_value
+
+    with pytest.raises(ValueError, match="default_seed"):
+        validate_generation_config(config)
+
+
+@pytest.mark.parametrize("demand_level", ["low", "high"])
+def test_generation_requires_each_demand_range(demand_level):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    del config["generation"]["demand_ranges"][demand_level]
+
+    with pytest.raises(ValueError, match=f"missing fields.*{demand_level}"):
+        validate_generation_config(config)
+
+
+def test_generation_rejects_medium_demand_range():
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["demand_ranges"]["medium"] = {
+        "minimum": 1,
+        "maximum": 3,
+    }
+
+    with pytest.raises(ValueError, match="medium demand level is unsupported"):
+        validate_generation_config(config)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("minimum", True),
+        ("maximum", False),
+        ("minimum", 0.5),
+        ("maximum", 2.5),
+        ("minimum", -1),
+        ("maximum", -1),
+    ],
+)
+def test_generation_demand_ranges_reject_invalid_values(
+    field_name, invalid_value
+):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["demand_ranges"]["low"][field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=field_name):
+        validate_generation_config(config)
+
+
+def test_generation_demand_range_rejects_reversed_bounds():
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["demand_ranges"]["low"] = {
+        "minimum": 3,
+        "maximum": 2,
+    }
+
+    with pytest.raises(ValueError, match="minimum cannot exceed maximum"):
+        validate_generation_config(config)
+
+
+@pytest.mark.parametrize("invalid_value", [True, False, -1, 1.5])
+def test_generation_adjustment_rejects_invalid_values(invalid_value):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["high_demand_day_adjustment"] = invalid_value
+
+    with pytest.raises(ValueError, match="high_demand_day_adjustment"):
+        validate_generation_config(config)
+
+
+@pytest.mark.parametrize("invalid_value", [[], "low", None])
+def test_generation_demand_ranges_must_be_a_mapping(invalid_value):
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["demand_ranges"] = invalid_value
+
+    with pytest.raises(ValueError, match="demand_ranges must be a mapping"):
+        validate_generation_config(config)
+
+
+def test_generation_range_rejects_unknown_fields():
+    config = deepcopy(load_generation_config(GENERATION_PATH))
+    config["generation"]["demand_ranges"]["low"]["average"] = 1
+
+    with pytest.raises(ValueError, match="unknown fields.*average"):
+        validate_generation_config(config)
+
+
 @pytest.mark.parametrize("yaml_text", ["", "- products"])
 def test_yaml_top_level_must_be_a_mapping(tmp_path, yaml_text):
     config_path = tmp_path / "invalid.yaml"
@@ -285,3 +454,20 @@ def test_malformed_yaml_raises_project_value_error(tmp_path):
 
     assert str(config_path) in str(exc_info.value)
     assert isinstance(exc_info.value.__cause__, yaml.YAMLError)
+
+
+@pytest.mark.parametrize("yaml_text", ["", "- generation"])
+def test_generation_yaml_top_level_must_be_a_mapping(tmp_path, yaml_text):
+    config_path = tmp_path / "generation.yaml"
+    config_path.write_text(yaml_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must contain a mapping"):
+        load_generation_config(config_path)
+
+
+def test_malformed_generation_yaml_uses_project_error_handling(tmp_path):
+    config_path = tmp_path / "generation.yaml"
+    config_path.write_text("generation: [\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Malformed YAML configuration"):
+        load_generation_config(config_path)

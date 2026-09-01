@@ -48,7 +48,7 @@ Do not include donut waste in Version 1.
 | Cold_Foam_A | 6 units | Approximately 14 days | Approximately 60 days | High demand | Main risk is not yet finalized. |
 | Whipped_Topping | Provisional: 6 units | Provisional: approximately 14 days | Provisional: approximately 60 days | High demand | Pack size and shelf-life values require confirmation. |
 | Skim_Milk | 4 units | Dispenser shelf life after opening is 3 days | Approximately 60 days | Low demand | Fewer dispenser refills than Whole_Milk. Main risk is waste. |
-| Oat_Beverage | 4 units | 7 days | Approximately 90 days | Not yet finalized | Main risk is waste. |
+| Oat_Beverage | 4 units | 7 days | Approximately 90 days | Low demand | Main risk is waste. |
 
 ## 5. Delivery-cycle assumptions
 
@@ -185,7 +185,9 @@ Development must follow a controlled sequence:
 2. **Phase 2: Product and delivery configuration**
    - Add approved product and delivery assumptions to configuration files.
 3. **Phase 3: Deterministic synthetic-data generator**
-   - Generate reproducible synthetic daily inventory data with a configurable random seed.
+   - Generate reproducible synthetic daily demand scenarios with a configurable random seed.
+   - Produce only dates, weekdays, approved aliases, high-demand-day flags, demand units, and delivery-event flags.
+   - Do not simulate inventory, fulfillment, waste, expiration, stockouts, or ordering behavior.
 4. **Phase 4: Inventory simulation and baseline ordering policy**
    - Simulate inventory balance, stockouts, waste, and a simple baseline ordering policy.
 5. **Phase 5: Tests and validation**
@@ -215,13 +217,11 @@ Provisional assumptions that require confirmation:
 - Whipped_Topping open shelf life is provisionally approximately 14 days.
 - Whipped_Topping unopened shelf life is provisionally approximately 60 days.
 - Cold_Foam_A main risk is not yet finalized.
-- Oat_Beverage demand pattern or demand level is not yet finalized.
+- Oat_Beverage high-demand weekdays are not yet finalized.
 
 Open questions:
 
 - What synthetic starting inventory should be used for each product?
-- What synthetic daily demand ranges should be used for each product?
-- How should high, medium, and low demand levels be converted into numeric synthetic values?
 - How should refill observations be converted into safe synthetic assumptions without treating them as exact consumption quantities?
 - What target balance between stockout risk and waste risk should the baseline ordering policy use?
 - What validation thresholds should define an acceptable synthetic dataset?
@@ -239,3 +239,13 @@ Phase 1 is done when:
 - Forecasting, optimization, dashboards, notebooks, datasets, and production code are not implemented during the specification-only task.
 - Known assumptions and open questions are documented.
 - The repository is ready for the next approved phase.
+
+## 15. Approved Phase 3 synthetic demand assumptions
+
+Phase 3 uses a fixed synthetic start date of January 7, 2025 and generates 56 days for exactly nine approved product aliases. The default random seed is 42. Low-demand products use inclusive integer values from 0 through 2. High-demand products use inclusive integer values from 3 through 6. A product receives exactly one additional demand unit when the generated weekday appears in its configured `high_demand_days` list.
+
+The generator marks a delivery event on the first date and every 14 days afterward. A delivery event describes the configured calendar cycle only; it does not add inventory or describe a delivery quantity.
+
+The Phase 3 CSV contract contains exactly these columns: `date`, `weekday`, `product_id`, `is_high_demand_day`, `demand_units`, and `delivery_event`. The default output contains 504 synthetic records. Generated CSV files are reproducible artifacts and are not committed.
+
+`demand_units` is a future prediction target. It must not be used as an input feature for a model that predicts demand for the same row. Phase 3 does not implement machine learning or forecasting.
