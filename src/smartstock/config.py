@@ -20,7 +20,7 @@ APPROVED_PRODUCT_IDS = {
 
 ALLOWED_DEMAND_LEVELS = {"high", "low", "unknown"}
 ALLOWED_PRIMARY_RISKS = {"stockout", "waste", "unknown"}
-ALLOWED_WEEKDAYS = {
+ENGLISH_WEEKDAYS = (
     "Monday",
     "Tuesday",
     "Wednesday",
@@ -28,7 +28,8 @@ ALLOWED_WEEKDAYS = {
     "Friday",
     "Saturday",
     "Sunday",
-}
+)
+ALLOWED_WEEKDAYS = set(ENGLISH_WEEKDAYS)
 ELIGIBLE_PROVISIONAL_FIELDS = {
     "pack_size_units",
     "open_shelf_life_days",
@@ -83,6 +84,11 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"YAML file must contain a mapping: {config_path}")
     return data
+
+
+def get_english_weekday(value: date) -> str:
+    """Return the explicit English weekday name for a date."""
+    return ENGLISH_WEEKDAYS[value.weekday()]
 
 
 def load_products_config(path: str | Path) -> dict[str, Any]:
@@ -204,7 +210,7 @@ def validate_generation_config(config: dict[str, Any]) -> None:
         raise ValueError("start_date must be a valid ISO date.") from exc
     if parsed_start_date.isoformat() != start_date:
         raise ValueError("start_date must use the ISO YYYY-MM-DD format.")
-    if parsed_start_date.strftime("%A") != "Tuesday":
+    if get_english_weekday(parsed_start_date) != "Tuesday":
         raise ValueError("start_date must be a Tuesday.")
 
     _validate_integer(generation, "duration_days", minimum=1)

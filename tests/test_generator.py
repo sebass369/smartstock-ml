@@ -1,7 +1,9 @@
 import csv
 from copy import deepcopy
+import hashlib
 from pathlib import Path
 import random
+import shutil
 
 import pytest
 
@@ -23,6 +25,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS_PATH = PROJECT_ROOT / "config" / "products.yaml"
 DELIVERY_PATH = PROJECT_ROOT / "config" / "delivery.yaml"
 GENERATION_PATH = PROJECT_ROOT / "config" / "generation.yaml"
+DEFAULT_CSV_SHA256 = (
+    "46f6762dc900f4fb3b965b97773d3147b288d17c1ec044c2c487372cc5e55096"
+)
 
 
 @pytest.fixture
@@ -94,6 +99,21 @@ def test_same_seed_produces_byte_identical_csv(configurations, tmp_path):
     write_records_csv(generate_daily_records(*configurations, seed=42), second_path)
 
     assert first_path.read_bytes() == second_path.read_bytes()
+
+
+def test_default_csv_matches_versioned_reproducibility_anchor(
+    configurations, tmp_path
+):
+    output_path = tmp_path / "records.csv"
+    records = generate_daily_records(*configurations, seed=42)
+    write_records_csv(records, output_path)
+    csv_bytes = output_path.read_bytes()
+
+    # Deliberate synthetic-data contract changes require reviewing this anchor.
+    assert hashlib.sha256(csv_bytes).hexdigest() == DEFAULT_CSV_SHA256
+    assert csv_bytes.splitlines()[1] == (
+        b"2025-01-07,Tuesday,Milk_Product_A,false,3,true"
+    )
 
 
 def test_selected_different_seeds_change_demand(configurations):
@@ -199,6 +219,12 @@ def test_unsupported_product_demand_level_raises_value_error(configurations):
         generate_daily_records(products, delivery, generation)
 
 
+@pytest.mark.parametrize("invalid_seed", [True, 42.0, "42"])
+def test_generator_rejects_non_integer_seed(configurations, invalid_seed):
+    with pytest.raises(ValueError, match="seed must be an integer"):
+        generate_daily_records(*configurations, seed=invalid_seed)
+
+
 def test_boolean_demand_value_cannot_pass_record_validation(
     configurations, default_records
 ):
@@ -227,16 +253,41 @@ def test_extra_delivery_event_cannot_pass_record_validation(
         validate_generated_records(invalid_records, *configurations)
 
 
-def test_csv_uses_exact_header_and_lowercase_booleans(default_records, tmp_path):
+def test_csv_uses_exact_portable_bytes(default_records, tmp_path):
     output_path = tmp_path / "records.csv"
     write_records_csv(default_records, output_path)
 
-    lines = output_path.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == ",".join(RECORD_COLUMNS)
-    assert "True" not in lines[1]
-    assert "False" not in lines[1]
-    assert "true" in lines[1]
-    assert "false" in lines[1]
+    csv_bytes = output_path.read_bytes()
+    expected_header = b",".join(
+        column.encode("ascii") for column in RECORD_COLUMNS
+    ) + b"\n"
+    assert csv_bytes.startswith(expected_header)
+    assert not csv_bytes.startswith(b"\xef\xbb\xbf")
+    assert b"\r\n" not in csv_bytes
+    assert csv_bytes.endswith(b"\n")
+    assert not csv_bytes.endswith(b"\n\n")
+    assert csv_bytes.count(b"\n") == 505
+
+    for data_row in csv_bytes.splitlines()[1:]:
+        fields = data_row.split(b",")
+        assert fields[3] in {b"true", b"false"}
+        assert fields[5] in {b"true", b"false"}
+
+
+def test_writer_rejects_record_with_wrong_key_order(default_records, tmp_path):
+    invalid_records = deepcopy(default_records)
+    first_record = invalid_records[0]
+    invalid_records[0] = {
+        "weekday": first_record["weekday"],
+        "date": first_record["date"],
+        "product_id": first_record["product_id"],
+        "is_high_demand_day": first_record["is_high_demand_day"],
+        "demand_units": first_record["demand_units"],
+        "delivery_event": first_record["delivery_event"],
+    }
+
+    with pytest.raises(ValueError, match="exact column order"):
+        write_records_csv(invalid_records, tmp_path / "records.csv")
 
 
 def test_csv_contains_no_private_or_operational_fields(default_records, tmp_path):
@@ -280,6 +331,28 @@ def test_cli_seed_override_changes_output(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "with seed 99." in captured.out
     assert default_path.read_bytes() != override_path.read_bytes()
+
+
+def test_cli_uses_approved_default_paths_and_configuration_seed(
+    tmp_path, monkeypatch, capsys
+):
+    config_directory = tmp_path / "config"
+    config_directory.mkdir()
+    for source_path in (PRODUCTS_PATH, DELIVERY_PATH, GENERATION_PATH):
+        shutil.copyfile(source_path, config_directory / source_path.name)
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main([])
+
+    output_path = Path("data/generated/synthetic_daily_records.csv")
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert output_path.is_file()
+    assert "Generated 504 records" in captured.out
+    assert "with seed 42." in captured.out
+    assert hashlib.sha256(output_path.read_bytes()).hexdigest() == (
+        DEFAULT_CSV_SHA256
+    )
 
 
 def test_cli_returns_nonzero_for_invalid_configuration(tmp_path, capsys):

@@ -30,6 +30,8 @@ else:
 
 The generator uses a local `random.Random(seed)` instance. The same validated configuration, seed, start date, duration, and generator code produce identical records.
 
+Phase 3 supports only `low` and `high` demand levels. `medium` is unsupported. A product configured with `demand_level: unknown` cannot be processed by the Phase 3 generator. The broader Phase 2 product validator may retain `unknown` for incomplete or future configuration.
+
 ## CSV contract
 
 Columns always appear in this order:
@@ -57,7 +59,7 @@ Run the generator from the repository root:
 python -m smartstock.generator
 ```
 
-The default output is `data/generated/synthetic_daily_records.csv`. Generated CSV files are ignored by Git and should not be committed.
+The default output is `data/generated/synthetic_daily_records.csv`. Generated CSV files are ignored by Git and should not be committed. The directory itself is not ignored, and `data/generated/.gitkeep` remains tracked.
 
 The schema excludes company and employer names, stores, locations, people, vendors, credentials, private URLs, source paths, real documents, and private identifiers. Donut products and donut waste are excluded.
 

@@ -22,6 +22,8 @@ It is included only so future synthetic modeling can remain structured while cle
 
 Phase 3 uses only `demand_level` and `high_demand_days` from the product configuration. It does not use pack sizes or shelf-life values to calculate demand. The values are synthetic assumptions and are not operational or food-safety guidance.
 
+The Phase 3 generator supports only `low` and `high` demand levels. `medium` is unsupported, and `unknown` cannot be processed by the generator. The broader Phase 2 configuration validator may retain `unknown` for incomplete or future configuration.
+
 ## Privacy rules
 
 Never add company names, store identifiers, addresses, exact locations, employee names, manager names, customer names, vendor names, private URLs, credentials, invoice information, real delivery records, screenshots, or internal product names to this directory.

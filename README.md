@@ -15,9 +15,9 @@ The project contains the Phase 1 Python foundation, Phase 2 validated configurat
 - `src/smartstock/`: reusable Python package code.
 - `tests/`: automated tests.
 - `config/`: validated synthetic product and delivery configuration.
-- `docs/`: future assumptions, privacy rules, data dictionary, and project decisions.
+- `docs/`: assumptions, privacy rules, the data dictionary, and future project decisions.
 - `notebooks/`: future Google Colab demonstrations that import reusable code.
-- `data/generated/`: reproducible generated synthetic data that is ignored by Git.
+- `data/generated/`: generated CSV files are ignored by Git while `.gitkeep` remains tracked.
 - `data/sample/`: future small privacy-safe synthetic examples.
 
 ## Requirements
@@ -52,6 +52,8 @@ python -m smartstock.generator
 The default command writes `data/generated/synthetic_daily_records.csv`. It produces 504 rows from 56 synthetic dates and nine approved product aliases. The CSV columns are `date`, `weekday`, `product_id`, `is_high_demand_day`, `demand_units`, and `delivery_event`.
 
 Demand uses a local seeded random generator. Low demand is an inclusive integer from 0 through 2, and high demand is an inclusive integer from 3 through 6. One unit is added on a product's configured high-demand weekdays. The default seed is 42 and can be replaced with `--seed`.
+
+Phase 3 supports only `low` and `high` demand levels. `medium` is unsupported, and a product with `demand_level: unknown` cannot be processed by the Phase 3 generator. The broader Phase 2 configuration validator may retain `unknown` for incomplete or future configuration.
 
 A delivery event marks the first date and each 14-day Tuesday cycle. It does not represent inventory or a delivery quantity.
 

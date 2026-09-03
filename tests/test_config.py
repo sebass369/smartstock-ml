@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ from smartstock.config import (
     ALLOWED_PRIMARY_RISKS,
     ALLOWED_WEEKDAYS,
     APPROVED_PRODUCT_IDS,
+    ENGLISH_WEEKDAYS,
+    get_english_weekday,
     load_delivery_config,
     load_generation_config,
     load_products_config,
@@ -22,6 +25,25 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS_PATH = PROJECT_ROOT / "config" / "products.yaml"
 DELIVERY_PATH = PROJECT_ROOT / "config" / "delivery.yaml"
 GENERATION_PATH = PROJECT_ROOT / "config" / "generation.yaml"
+
+
+def test_english_weekday_names_are_explicit_and_monday_first():
+    expected_weekdays = (
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    )
+    monday = date(2025, 1, 6)
+
+    assert ENGLISH_WEEKDAYS == expected_weekdays
+    assert [
+        get_english_weekday(monday + timedelta(days=offset))
+        for offset in range(7)
+    ] == list(expected_weekdays)
 
 
 def test_real_synthetic_configuration_loads_successfully():

@@ -12,6 +12,7 @@ from typing import Any
 
 from smartstock.config import (
     APPROVED_PRODUCT_IDS,
+    get_english_weekday,
     load_delivery_config,
     load_generation_config,
     load_products_config,
@@ -61,7 +62,7 @@ def generate_daily_records(
 
     for day_offset in range(duration_days):
         current_date = start_date + timedelta(days=day_offset)
-        weekday = current_date.strftime("%A")
+        weekday = get_english_weekday(current_date)
         delivery_event = day_offset % cycle_length == 0
 
         for product in products:
@@ -112,7 +113,7 @@ def validate_generated_records(
     delivery_config: dict[str, object],
     generation_config: dict[str, object],
 ) -> None:
-    """Validate the complete Phase 3 daily demand record set."""
+    """Validate record structure and demand bounds without replaying randomness."""
     validate_products_config(products_config)
     validate_delivery_config(delivery_config)
     validate_generation_config(generation_config)
@@ -141,7 +142,7 @@ def validate_generated_records(
 
     for day_offset in range(duration_days):
         expected_date = start_date + timedelta(days=day_offset)
-        expected_weekday = expected_date.strftime("%A")
+        expected_weekday = get_english_weekday(expected_date)
         expected_delivery_event = day_offset % cycle_length == 0
 
         for product_index, product in enumerate(products):
@@ -159,9 +160,6 @@ def validate_generated_records(
                 raise ValueError(
                     "Generated product order does not match configuration order."
                 )
-            if product_id not in APPROVED_PRODUCT_IDS or "donut" in product_id.lower():
-                raise ValueError(f"Unapproved product identifier: {product_id}.")
-
             high_demand_days = product["high_demand_days"]
             if not isinstance(high_demand_days, list):
                 raise ValueError(f"High-demand days must be a list for {product_id}.")
