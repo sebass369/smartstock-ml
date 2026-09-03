@@ -85,9 +85,8 @@ products:
     pack_size_units: 4
     open_shelf_life_days: 7
     unopened_shelf_life_days: 90
-    demand_level: unknown
+    demand_level: low
     high_demand_days: []
     primary_risk: waste
     provisional_fields:
-      - demand_level
       - high_demand_days

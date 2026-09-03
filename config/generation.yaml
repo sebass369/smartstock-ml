@@ -1,0 +1,12 @@
+generation:
+  start_date: "2025-01-07"
+  duration_days: 56
+  default_seed: 42
+  demand_ranges:
+    low:
+      minimum: 0
+      maximum: 2
+    high:
+      minimum: 3
+      maximum: 6
+  high_demand_day_adjustment: 1

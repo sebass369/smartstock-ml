@@ -1,5 +1,6 @@
 """Load and validate synthetic SmartStock configuration files."""
 
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,7 @@ APPROVED_PRODUCT_IDS = {
 
 ALLOWED_DEMAND_LEVELS = {"high", "low", "unknown"}
 ALLOWED_PRIMARY_RISKS = {"stockout", "waste", "unknown"}
-ALLOWED_WEEKDAYS = {
+ENGLISH_WEEKDAYS = (
     "Monday",
     "Tuesday",
     "Wednesday",
@@ -27,7 +28,8 @@ ALLOWED_WEEKDAYS = {
     "Friday",
     "Saturday",
     "Sunday",
-}
+)
+ALLOWED_WEEKDAYS = set(ENGLISH_WEEKDAYS)
 ELIGIBLE_PROVISIONAL_FIELDS = {
     "pack_size_units",
     "open_shelf_life_days",
@@ -56,6 +58,17 @@ DELIVERY_REQUIRED_FIELDS = {
     "require_pack_size_constraints",
 }
 
+GENERATION_REQUIRED_FIELDS = {
+    "start_date",
+    "duration_days",
+    "default_seed",
+    "demand_ranges",
+    "high_demand_day_adjustment",
+}
+
+DEMAND_RANGE_LEVELS = {"low", "high"}
+DEMAND_RANGE_REQUIRED_FIELDS = {"minimum", "maximum"}
+
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
     """Load a YAML file safely and return a dictionary."""
@@ -73,6 +86,11 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     return data
 
 
+def get_english_weekday(value: date) -> str:
+    """Return the explicit English weekday name for a date."""
+    return ENGLISH_WEEKDAYS[value.weekday()]
+
+
 def load_products_config(path: str | Path) -> dict[str, Any]:
     """Load and validate the synthetic product configuration."""
     config = load_yaml(path)
@@ -84,6 +102,13 @@ def load_delivery_config(path: str | Path) -> dict[str, Any]:
     """Load and validate the synthetic delivery configuration."""
     config = load_yaml(path)
     validate_delivery_config(config)
+    return config
+
+
+def load_generation_config(path: str | Path) -> dict[str, Any]:
+    """Load and validate the synthetic demand generation configuration."""
+    config = load_yaml(path)
+    validate_generation_config(config)
     return config
 
 
@@ -163,6 +188,59 @@ def validate_delivery_config(config: dict[str, Any]) -> None:
         raise ValueError("Delivery window approximate must be the Boolean true.")
 
 
+def validate_generation_config(config: dict[str, Any]) -> None:
+    """Validate dates, randomness, and synthetic demand ranges."""
+    _validate_exact_fields(config, {"generation"}, "Generation YAML")
+    generation = config.get("generation")
+    if not isinstance(generation, dict):
+        raise ValueError("Generation configuration must contain a generation mapping.")
+
+    _validate_exact_fields(
+        generation,
+        GENERATION_REQUIRED_FIELDS,
+        "Generation configuration",
+    )
+
+    start_date = generation["start_date"]
+    if not isinstance(start_date, str):
+        raise ValueError("start_date must be an ISO date string.")
+    try:
+        parsed_start_date = date.fromisoformat(start_date)
+    except ValueError as exc:
+        raise ValueError("start_date must be a valid ISO date.") from exc
+    if parsed_start_date.isoformat() != start_date:
+        raise ValueError("start_date must use the ISO YYYY-MM-DD format.")
+    if get_english_weekday(parsed_start_date) != "Tuesday":
+        raise ValueError("start_date must be a Tuesday.")
+
+    _validate_integer(generation, "duration_days", minimum=1)
+    _validate_integer(generation, "default_seed")
+    _validate_integer(generation, "high_demand_day_adjustment", minimum=0)
+
+    demand_ranges = generation["demand_ranges"]
+    if not isinstance(demand_ranges, dict):
+        raise ValueError("demand_ranges must be a mapping.")
+    if "medium" in demand_ranges:
+        raise ValueError("The medium demand level is unsupported.")
+    _validate_exact_fields(demand_ranges, DEMAND_RANGE_LEVELS, "demand_ranges")
+
+    for demand_level in ("low", "high"):
+        demand_range = demand_ranges[demand_level]
+        if not isinstance(demand_range, dict):
+            raise ValueError(f"The {demand_level} demand range must be a mapping.")
+        _validate_exact_fields(
+            demand_range,
+            DEMAND_RANGE_REQUIRED_FIELDS,
+            f"The {demand_level} demand range",
+        )
+        _validate_integer(demand_range, "minimum", minimum=0)
+        _validate_integer(demand_range, "maximum", minimum=0)
+        if demand_range["minimum"] > demand_range["maximum"]:
+            raise ValueError(
+                f"The {demand_level} demand range minimum cannot exceed maximum."
+            )
+
+
 def _validate_product(product: Any) -> None:
     if not isinstance(product, dict):
         raise ValueError("Each product must be a mapping.")
@@ -192,7 +270,9 @@ def _validate_product(product: Any) -> None:
         raise ValueError(f"High-demand days must be a list for {product_id}.")
     for weekday in high_demand_days:
         if weekday not in ALLOWED_WEEKDAYS:
-            raise ValueError(f"Invalid high-demand weekday for {product_id}: {weekday}.")
+            raise ValueError(
+                f"Invalid high-demand weekday for {product_id}: {weekday}."
+            )
 
     provisional_fields = product["provisional_fields"]
     if not isinstance(provisional_fields, list):
@@ -221,3 +301,33 @@ def _validate_positive_integer(product: dict[str, Any], field_name: str) -> None
         raise ValueError(
             f"{field_name} must be a positive integer for {product['product_id']}."
         )
+
+
+def _validate_exact_fields(
+    mapping: dict[str, Any],
+    required_fields: set[str],
+    description: str,
+) -> None:
+    missing_fields = required_fields - set(mapping)
+    if missing_fields:
+        raise ValueError(
+            f"{description} is missing fields: {sorted(missing_fields)}."
+        )
+
+    unknown_fields = set(mapping) - required_fields
+    if unknown_fields:
+        raise ValueError(
+            f"{description} has unknown fields: {sorted(unknown_fields)}."
+        )
+
+
+def _validate_integer(
+    mapping: dict[str, Any],
+    field_name: str,
+    minimum: int | None = None,
+) -> None:
+    value = mapping[field_name]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be an integer.")
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{field_name} must be at least {minimum}.")
