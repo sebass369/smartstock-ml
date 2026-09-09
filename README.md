@@ -8,7 +8,7 @@ This repository must use only synthetic and anonymized data. Do not add employer
 
 ## Current project status
 
-The project contains the Phase 1 Python foundation, Phase 2 validated configuration, and a Phase 3 deterministic synthetic-demand generator. Phase 3 creates demand scenarios only. It does not simulate inventory, fulfillment, waste, expiration, stockouts, or ordering.
+The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, and a Phase 4A deterministic inventory simulator. Phase 4A adds fixed starting inventory, fixed full-pack deliveries, FIFO fulfillment, unopened expiration, waste, and stockout outcomes. The Phase 4B baseline ordering policy is postponed.
 
 ## Planned repository structure
 
@@ -57,11 +57,26 @@ Phase 3 supports only `low` and `high` demand levels. `medium` is unsupported, a
 
 A delivery event marks the first date and each 14-day Tuesday cycle. It does not represent inventory or a delivery quantity.
 
+## Simulating synthetic inventory
+
+Run the separate Phase 4A CLI from the repository root:
+
+```bash
+python -m smartstock.inventory
+```
+
+The default command writes `data/generated/synthetic_inventory_records.csv`. It generates Phase 3 demand in memory, applies the fixed synthetic values in `config/inventory.yaml`, and produces 504 deterministic records. Use `--seed` to override the demand seed or `--output` to choose another path.
+
+Inventory uses FIFO cohorts. Carried cohorts expire before demand, scheduled deliveries are then added and are usable that date, and demand consumes the oldest usable units first. Only unopened shelf life is used. Fixed delivery pack counts are scenario inputs, not recommendations.
+
+The default 56-day run has zero expiration and waste because every approved unopened shelf life is at least 60 days and starting inventory is fresh. Focused tests use shorter synthetic shelf lives to verify expiration boundaries.
+
 Python 3.12 is the project baseline. Phase 3 is also verified with Python 3.13 when that interpreter is available.
 
 ## Current limitations
 
 - Generated demand is synthetic and is not operational or food-safety guidance.
 - `demand_units` is a future prediction target and must not be used to predict demand for the same row.
-- No inventory simulation or ordering recommendations are implemented yet.
+- No baseline ordering policy or ordering recommendations are implemented yet.
 - No forecasting, optimization, dashboard, deployment, or notebook analysis is implemented yet.
+- Phase 4A outcome columns describe results after demand and inventory transitions. They must not be used as same-row features in future prediction tasks.

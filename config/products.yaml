@@ -67,9 +67,7 @@ products:
     high_demand_days: []
     primary_risk: unknown
     provisional_fields:
-      - pack_size_units
       - open_shelf_life_days
-      - unopened_shelf_life_days
       - high_demand_days
       - primary_risk
   - product_id: Skim_Milk
@@ -82,9 +80,9 @@ products:
     provisional_fields:
       - high_demand_days
   - product_id: Oat_Beverage
-    pack_size_units: 4
+    pack_size_units: 6
     open_shelf_life_days: 7
-    unopened_shelf_life_days: 90
+    unopened_shelf_life_days: 60
     demand_level: low
     high_demand_days: []
     primary_risk: waste

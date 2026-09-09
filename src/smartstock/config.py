@@ -68,6 +68,16 @@ GENERATION_REQUIRED_FIELDS = {
 
 DEMAND_RANGE_LEVELS = {"low", "high"}
 DEMAND_RANGE_REQUIRED_FIELDS = {"minimum", "maximum"}
+INVENTORY_REQUIRED_FIELDS = {"products"}
+INVENTORY_PRODUCT_REQUIRED_FIELDS = {
+    "product_id",
+    "starting_inventory_units",
+    "delivery_pack_count",
+}
+PHASE_4_DIRECT_PRODUCT_FIELDS = {
+    "pack_size_units",
+    "unopened_shelf_life_days",
+}
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
@@ -109,6 +119,16 @@ def load_generation_config(path: str | Path) -> dict[str, Any]:
     """Load and validate the synthetic demand generation configuration."""
     config = load_yaml(path)
     validate_generation_config(config)
+    return config
+
+
+def load_inventory_config(
+    path: str | Path,
+    products_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Load and validate fixed synthetic inventory inputs."""
+    config = load_yaml(path)
+    validate_inventory_config(config, products_config)
     return config
 
 
@@ -241,6 +261,66 @@ def validate_generation_config(config: dict[str, Any]) -> None:
             )
 
 
+def validate_inventory_config(
+    config: dict[str, Any],
+    products_config: dict[str, Any],
+) -> None:
+    """Validate fixed starting inventory and delivery pack counts."""
+    validate_products_config(products_config)
+    _validate_exact_fields(config, {"inventory"}, "Inventory YAML")
+    inventory = config.get("inventory")
+    if not isinstance(inventory, dict):
+        raise ValueError("Inventory configuration must contain an inventory mapping.")
+    _validate_exact_fields(
+        inventory,
+        INVENTORY_REQUIRED_FIELDS,
+        "Inventory configuration",
+    )
+
+    inventory_products = inventory["products"]
+    if not isinstance(inventory_products, list):
+        raise ValueError("Inventory products must be a list.")
+    if len(inventory_products) != len(APPROVED_PRODUCT_IDS):
+        raise ValueError("Inventory configuration must contain exactly nine products.")
+
+    inventory_product_ids: list[str] = []
+    for entry in inventory_products:
+        if not isinstance(entry, dict):
+            raise ValueError("Each inventory product must be a mapping.")
+        _validate_exact_fields(
+            entry,
+            INVENTORY_PRODUCT_REQUIRED_FIELDS,
+            f"Inventory product {entry.get('product_id')}",
+        )
+
+        product_id = entry["product_id"]
+        if not isinstance(product_id, str) or product_id not in APPROVED_PRODUCT_IDS:
+            raise ValueError(f"Unknown inventory product ID: {product_id}.")
+        inventory_product_ids.append(product_id)
+        _validate_inventory_integer(entry, "starting_inventory_units", product_id)
+        _validate_inventory_integer(entry, "delivery_pack_count", product_id)
+
+    if len(inventory_product_ids) != len(set(inventory_product_ids)):
+        raise ValueError("Inventory product IDs must be unique.")
+    configured_ids = set(inventory_product_ids)
+    if configured_ids != APPROVED_PRODUCT_IDS:
+        extra_ids = configured_ids - APPROVED_PRODUCT_IDS
+        missing_ids = APPROVED_PRODUCT_IDS - configured_ids
+        raise ValueError(
+            "Inventory product IDs must match the approved public aliases. "
+            f"Extra: {sorted(extra_ids)}. Missing: {sorted(missing_ids)}."
+        )
+
+    for product in products_config["products"]:
+        provisional_fields = set(product["provisional_fields"])
+        blocked_fields = provisional_fields & PHASE_4_DIRECT_PRODUCT_FIELDS
+        if blocked_fields:
+            raise ValueError(
+                "Phase 4 directly consumed fields cannot remain provisional for "
+                f"{product['product_id']}: {sorted(blocked_fields)}."
+            )
+
+
 def _validate_product(product: Any) -> None:
     if not isinstance(product, dict):
         raise ValueError("Each product must be a mapping.")
@@ -331,3 +411,15 @@ def _validate_integer(
         raise ValueError(f"{field_name} must be an integer.")
     if minimum is not None and value < minimum:
         raise ValueError(f"{field_name} must be at least {minimum}.")
+
+
+def _validate_inventory_integer(
+    entry: dict[str, Any],
+    field_name: str,
+    product_id: str,
+) -> None:
+    value = entry[field_name]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(
+            f"{field_name} must be a nonnegative integer for {product_id}."
+        )

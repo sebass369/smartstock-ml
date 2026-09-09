@@ -1,0 +1,37 @@
+inventory:
+  products:
+    - product_id: Milk_Product_A
+      starting_inventory_units: 8
+      delivery_pack_count: 16
+
+    - product_id: Milk_Product_B
+      starting_inventory_units: 12
+      delivery_pack_count: 11
+
+    - product_id: Whole_Milk
+      starting_inventory_units: 8
+      delivery_pack_count: 16
+
+    - product_id: Fruit_Refresher_A
+      starting_inventory_units: 16
+      delivery_pack_count: 8
+
+    - product_id: Fruit_Refresher_B
+      starting_inventory_units: 16
+      delivery_pack_count: 8
+
+    - product_id: Cold_Foam_A
+      starting_inventory_units: 6
+      delivery_pack_count: 11
+
+    - product_id: Whipped_Topping
+      starting_inventory_units: 6
+      delivery_pack_count: 11
+
+    - product_id: Skim_Milk
+      starting_inventory_units: 0
+      delivery_pack_count: 4
+
+    - product_id: Oat_Beverage
+      starting_inventory_units: 0
+      delivery_pack_count: 3
