@@ -15,11 +15,13 @@ from smartstock.config import (
     load_delivery_config,
     load_generation_config,
     load_inventory_config,
+    load_ordering_config,
     load_products_config,
     load_yaml,
     validate_delivery_config,
     validate_generation_config,
     validate_inventory_config,
+    validate_ordering_config,
     validate_products_config,
 )
 
@@ -28,6 +30,7 @@ PRODUCTS_PATH = PROJECT_ROOT / "config" / "products.yaml"
 DELIVERY_PATH = PROJECT_ROOT / "config" / "delivery.yaml"
 GENERATION_PATH = PROJECT_ROOT / "config" / "generation.yaml"
 INVENTORY_PATH = PROJECT_ROOT / "config" / "inventory.yaml"
+ORDERING_PATH = PROJECT_ROOT / "config" / "ordering.yaml"
 
 
 def test_english_weekday_names_are_explicit_and_monday_first():
@@ -54,11 +57,17 @@ def test_real_synthetic_configuration_loads_successfully():
     delivery_config = load_delivery_config(DELIVERY_PATH)
     generation_config = load_generation_config(GENERATION_PATH)
     inventory_config = load_inventory_config(INVENTORY_PATH, products_config)
+    ordering_config = load_ordering_config(
+        ORDERING_PATH,
+        products_config,
+        delivery_config,
+    )
 
     assert "products" in products_config
     assert "delivery" in delivery_config
     assert "generation" in generation_config
     assert "inventory" in inventory_config
+    assert "ordering" in ordering_config
 
 
 def test_exactly_nine_approved_product_aliases_are_present():
@@ -706,3 +715,185 @@ def test_inventory_allows_provisional_phase_3_high_demand_days():
     inventory_config = load_yaml(INVENTORY_PATH)
 
     validate_inventory_config(inventory_config, products_config)
+
+
+def test_ordering_configuration_contains_exact_approved_defaults():
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    ordering = load_ordering_config(
+        ORDERING_PATH,
+        products_config,
+        delivery_config,
+    )["ordering"]
+
+    assert ordering["baseline_method"] == "previous_completed_cycle"
+    assert ordering["cold_start_method"] == "no_recommendation"
+    assert ordering["expiration_credit_method"] == (
+        "exclude_expiring_before_next_delivery"
+    )
+    assert ordering["recommendation_timing"] == "delivery_day_before_receipt"
+    assert [entry["product_id"] for entry in ordering["products"]] == [
+        product["product_id"] for product in products_config["products"]
+    ]
+    assert {entry["safety_stock_packs"] for entry in ordering["products"]} == {0}
+
+
+def test_reordered_ordering_products_are_accepted():
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    config["ordering"]["products"].reverse()
+
+    validate_ordering_config(config, products_config, delivery_config)
+
+
+@pytest.mark.parametrize(
+    "invalid_value",
+    [True, False, 1.5, "0", None, -1],
+)
+def test_ordering_safety_stock_rejects_invalid_values(invalid_value):
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    config["ordering"]["products"][0]["safety_stock_packs"] = invalid_value
+
+    with pytest.raises(ValueError, match="safety_stock_packs"):
+        validate_ordering_config(config, products_config, delivery_config)
+
+
+def test_ordering_safety_stock_accepts_zero_and_large_integer():
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    config["ordering"]["products"][0]["safety_stock_packs"] = 1_000_000
+
+    validate_ordering_config(config, products_config, delivery_config)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("baseline_method", "average_cycles"),
+        ("cold_start_method", "fixed_fallback"),
+        ("expiration_credit_method", "credit_all_inventory"),
+        ("recommendation_timing", "after_delivery"),
+    ],
+)
+def test_ordering_configuration_rejects_invalid_methods(
+    field_name,
+    invalid_value,
+):
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    config["ordering"][field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=field_name):
+        validate_ordering_config(config, products_config, delivery_config)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "extra", "unknown"])
+def test_ordering_configuration_rejects_invalid_product_scope(mutation):
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    if mutation == "missing":
+        config["ordering"]["products"].pop()
+    elif mutation == "duplicate":
+        config["ordering"]["products"][1]["product_id"] = (
+            config["ordering"]["products"][0]["product_id"]
+        )
+    elif mutation == "extra":
+        config["ordering"]["products"].append(
+            {"product_id": "Extra_Product", "safety_stock_packs": 0}
+        )
+    else:
+        config["ordering"]["products"][0]["product_id"] = "Unknown_Product"
+
+    with pytest.raises(ValueError):
+        validate_ordering_config(config, products_config, delivery_config)
+
+
+@pytest.mark.parametrize(
+    ("location", "field_name"),
+    [
+        ("top", "unexpected"),
+        ("ordering", "unexpected"),
+        ("product", "unexpected"),
+    ],
+)
+def test_ordering_configuration_rejects_unknown_fields(location, field_name):
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    if location == "top":
+        config[field_name] = 1
+    elif location == "ordering":
+        config["ordering"][field_name] = 1
+    else:
+        config["ordering"]["products"][0][field_name] = 1
+
+    with pytest.raises(ValueError, match="unknown fields.*unexpected"):
+        validate_ordering_config(config, products_config, delivery_config)
+
+
+@pytest.mark.parametrize(
+    ("location", "field_name"),
+    [
+        ("ordering", "baseline_method"),
+        ("product", "safety_stock_packs"),
+    ],
+)
+def test_ordering_configuration_rejects_missing_fields(location, field_name):
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    if location == "ordering":
+        del config["ordering"][field_name]
+    else:
+        del config["ordering"]["products"][0][field_name]
+
+    with pytest.raises(ValueError, match=f"missing fields.*{field_name}"):
+        validate_ordering_config(config, products_config, delivery_config)
+
+
+@pytest.mark.parametrize(
+    ("location", "invalid_value"),
+    [
+        ("ordering", []),
+        ("products", {}),
+        ("product", "Milk_Product_A"),
+    ],
+)
+def test_ordering_configuration_rejects_invalid_container_types(
+    location,
+    invalid_value,
+):
+    products_config = load_products_config(PRODUCTS_PATH)
+    delivery_config = load_delivery_config(DELIVERY_PATH)
+    config = deepcopy(
+        load_ordering_config(ORDERING_PATH, products_config, delivery_config)
+    )
+    if location == "ordering":
+        config["ordering"] = invalid_value
+    elif location == "products":
+        config["ordering"]["products"] = invalid_value
+    else:
+        config["ordering"]["products"][0] = invalid_value
+
+    with pytest.raises(ValueError):
+        validate_ordering_config(config, products_config, delivery_config)

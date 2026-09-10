@@ -1,0 +1,24 @@
+ordering:
+  baseline_method: previous_completed_cycle
+  cold_start_method: no_recommendation
+  expiration_credit_method: exclude_expiring_before_next_delivery
+  recommendation_timing: delivery_day_before_receipt
+  products:
+    - product_id: Milk_Product_A
+      safety_stock_packs: 0
+    - product_id: Milk_Product_B
+      safety_stock_packs: 0
+    - product_id: Whole_Milk
+      safety_stock_packs: 0
+    - product_id: Fruit_Refresher_A
+      safety_stock_packs: 0
+    - product_id: Fruit_Refresher_B
+      safety_stock_packs: 0
+    - product_id: Cold_Foam_A
+      safety_stock_packs: 0
+    - product_id: Whipped_Topping
+      safety_stock_packs: 0
+    - product_id: Skim_Milk
+      safety_stock_packs: 0
+    - product_id: Oat_Beverage
+      safety_stock_packs: 0
