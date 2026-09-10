@@ -46,9 +46,9 @@ Do not include donut waste in Version 1.
 | Fruit_Refresher_A | 8 units | 7 days | Approximately 60 days | Highest demand on Tuesday and Wednesday | Main risk is stockout. |
 | Fruit_Refresher_B | 8 units | 7 days | Approximately 60 days | Highest demand on Tuesday and Wednesday | Main risk is stockout. |
 | Cold_Foam_A | 6 units | Approximately 14 days | Approximately 60 days | High demand | Main risk is not yet finalized. |
-| Whipped_Topping | Provisional: 6 units | Provisional: approximately 14 days | Provisional: approximately 60 days | High demand | Pack size and shelf-life values require confirmation. |
+| Whipped_Topping | 6 units | Provisional: approximately 14 days | Approximately 60 days | High demand | Open shelf life, high-demand weekdays, and main risk require confirmation. |
 | Skim_Milk | 4 units | Dispenser shelf life after opening is 3 days | Approximately 60 days | Low demand | Fewer dispenser refills than Whole_Milk. Main risk is waste. |
-| Oat_Beverage | 4 units | 7 days | Approximately 90 days | Low demand | Main risk is waste. |
+| Oat_Beverage | 6 units | 7 days | Approximately 60 days | Low demand | Main risk is waste. |
 
 ## 5. Delivery-cycle assumptions
 
@@ -189,7 +189,8 @@ Development must follow a controlled sequence:
    - Produce only dates, weekdays, approved aliases, high-demand-day flags, demand units, and delivery-event flags.
    - Do not simulate inventory, fulfillment, waste, expiration, stockouts, or ordering behavior.
 4. **Phase 4: Inventory simulation and baseline ordering policy**
-   - Simulate inventory balance, stockouts, waste, and a simple baseline ordering policy.
+   - **Phase 4A:** Simulate inventory balance, stockouts, and expiration waste using fixed synthetic inputs.
+   - **Phase 4B:** Add a simple baseline ordering policy after its rules are approved.
 5. **Phase 5: Tests and validation**
    - Validate data rules, inventory balance, non-negative values, and pack-size constraints.
 6. **Phase 6: Exploratory analysis notebook**
@@ -213,15 +214,12 @@ Known assumptions:
 
 Provisional assumptions that require confirmation:
 
-- Whipped_Topping pack size is provisionally 6 units.
 - Whipped_Topping open shelf life is provisionally approximately 14 days.
-- Whipped_Topping unopened shelf life is provisionally approximately 60 days.
 - Cold_Foam_A main risk is not yet finalized.
 - Oat_Beverage high-demand weekdays are not yet finalized.
 
 Open questions:
 
-- What synthetic starting inventory should be used for each product?
 - How should refill observations be converted into safe synthetic assumptions without treating them as exact consumption quantities?
 - What target balance between stockout risk and waste risk should the baseline ordering policy use?
 - What validation thresholds should define an acceptable synthetic dataset?
@@ -249,3 +247,40 @@ The generator marks a delivery event on the first date and every 14 days afterwa
 The Phase 3 CSV contract contains exactly these columns: `date`, `weekday`, `product_id`, `is_high_demand_day`, `demand_units`, and `delivery_event`. The default output contains 504 synthetic records. Generated CSV files are reproducible artifacts and are not committed.
 
 `demand_units` is a future prediction target. It must not be used as an input feature for a model that predicts demand for the same row. Phase 3 does not implement machine learning or forecasting.
+
+## 16. Approved Phase 4A inventory assumptions
+
+Phase 4A uses fixed synthetic starting inventory and fixed delivery pack counts from `config/inventory.yaml`. These values are scenario inputs, not forecasts, learned values, operational records, ordering recommendations, or food-safety guidance. Starting inventory may be any nonnegative integer. Delivery pack counts are nonnegative integers and remain constant on the four scheduled delivery dates. Delivered units are calculated from the pack size in `config/products.yaml`.
+
+| Product alias | Starting inventory units | Delivery pack count |
+| --- | ---: | ---: |
+| Milk_Product_A | 8 | 16 |
+| Milk_Product_B | 12 | 11 |
+| Whole_Milk | 8 | 16 |
+| Fruit_Refresher_A | 16 | 8 |
+| Fruit_Refresher_B | 16 | 8 |
+| Cold_Foam_A | 6 | 11 |
+| Whipped_Topping | 6 | 11 |
+| Skim_Milk | 0 | 4 |
+| Oat_Beverage | 0 | 3 |
+
+Starting inventory is a fresh unopened FIFO cohort received on the first simulation date. At the start of each date, carried cohorts are measured and expired cohorts are removed. A scheduled delivery is then added as a fresh cohort and is usable on its received date. Demand consumes the oldest usable cohorts first.
+
+Only `unopened_shelf_life_days` is used. A cohort received on date `D` with shelf life `N` expires before demand on `D + N`. Open shelf life is not used in Phase 4A. Phase 3 provisional high-demand weekdays may drive the already approved demand records and remain clearly documented as provisional.
+
+The daily balances are:
+
+```text
+available_inventory_units =
+    starting_inventory_units - expired_units + delivered_units
+
+fulfilled_demand_units = min(demand_units, available_inventory_units)
+units_used = fulfilled_demand_units
+unmet_demand_units = demand_units - fulfilled_demand_units
+waste_units = expired_units
+ending_inventory_units = available_inventory_units - units_used
+```
+
+A stockout occurs when demand is greater than available inventory and unmet demand is positive. All quantities are nonnegative integers. The separate Phase 4A CSV contains 504 records and preserves all six Phase 3 fields before adding inventory outcomes.
+
+The default run lasts 56 days, while every approved unopened shelf life is at least 60 days. Therefore, default `expired_units` and `waste_units` are zero. Focused tests with shorter synthetic shelf lives verify expiration behavior. Phase 4A does not implement machine learning, forecasting, optimization, a baseline ordering policy, or ordering recommendations.

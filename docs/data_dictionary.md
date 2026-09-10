@@ -1,4 +1,4 @@
-# Phase 3 Data Dictionary
+# Phase 3 and Phase 4A Data Dictionary
 
 ## Purpose and boundary
 
@@ -64,3 +64,69 @@ The default output is `data/generated/synthetic_daily_records.csv`. Generated CS
 The schema excludes company and employer names, stores, locations, people, vendors, credentials, private URLs, source paths, real documents, and private identifiers. Donut products and donut waste are excluded.
 
 Python 3.12 is the baseline. Python 3.13 is used for compatibility verification when available.
+
+## Phase 4A purpose and boundary
+
+Phase 4A generates Phase 3 demand in memory and applies fixed synthetic inventory inputs. It simulates FIFO fulfillment, full-pack deliveries, unopened expiration, expiration waste, and stockouts. The fixed delivery pack counts are scenario inputs, not ordering recommendations. The Phase 4B baseline ordering policy is postponed.
+
+Phase 4A does not use open shelf life, primary risk, machine learning, forecasting, optimization, operational records, or food-safety rules. Provisional Phase 3 high-demand weekdays may influence the approved demand input and remain identified in `products.yaml`.
+
+## Inventory event order
+
+For each product and date, the simulator carries the prior cohort remainders forward. On the first date, starting inventory becomes a fresh unopened cohort. It records starting inventory, removes expired cohorts, adds any scheduled delivery as a fresh usable cohort, and then consumes demand from the oldest usable cohorts first. Empty cohorts are removed before their remainders are carried forward.
+
+A cohort received on date `D` with unopened shelf life `N` is usable from `D` through `D + N - 1`. It expires before demand on `D + N`.
+
+The aggregate relationships are:
+
+```text
+available_inventory_units =
+    starting_inventory_units - expired_units + delivered_units
+
+fulfilled_demand_units = min(demand_units, available_inventory_units)
+units_used = fulfilled_demand_units
+unmet_demand_units = demand_units - fulfilled_demand_units
+waste_units = expired_units
+ending_inventory_units = available_inventory_units - units_used
+```
+
+`stockout_event` is true exactly when demand exceeds available inventory and unmet demand is positive.
+
+## Phase 4A CSV contract
+
+The separate default output is `data/generated/synthetic_inventory_records.csv`. It contains 504 rows and these columns in exact order:
+
+| Column | Type | Meaning and validation |
+| --- | --- | --- |
+| `date` | ISO date string | Preserved Phase 3 date; continuous and ascending. |
+| `weekday` | string | Preserved English weekday matching `date`. |
+| `product_id` | string | One of exactly nine approved public aliases. |
+| `is_high_demand_day` | Boolean | Preserved Phase 3 configuration flag. |
+| `demand_units` | integer | Preserved nonnegative synthetic demand before inventory limits. |
+| `delivery_event` | Boolean | Preserved 14-day Tuesday calendar marker. |
+| `starting_inventory_units` | integer | Cohort total before expiration and delivery; equals prior ending inventory after the first date. |
+| `delivered_units` | integer | Fixed pack count multiplied by product pack size on delivery dates; zero otherwise. |
+| `expired_units` | integer | Remaining units removed from cohorts whose expiration date has arrived. |
+| `available_inventory_units` | integer | Usable units after expiration and delivery, before demand. |
+| `fulfilled_demand_units` | integer | Minimum of demand and available inventory. |
+| `units_used` | integer | Physical units consumed; equal to fulfilled demand in Phase 4A. |
+| `unmet_demand_units` | integer | Demand that available inventory could not fulfill. |
+| `waste_units` | integer | Equal to expired units because no other waste rule is approved. |
+| `ending_inventory_units` | integer | Usable cohort total remaining after demand. |
+| `stockout_event` | Boolean | True exactly when demand exceeds availability and unmet demand is positive. |
+
+All numeric fields are decimal nonnegative integers. Booleans are lowercase `true` or `false`. Files use UTF-8 without a byte-order mark, LF line endings, and one final LF.
+
+## Default expiration limitation
+
+The default simulation lasts 56 days. Every approved unopened shelf life is at least 60 days, and starting inventory is fresh. Therefore, every default `expired_units` and `waste_units` value is zero. Focused tests use shorter synthetic shelf lives to verify the exact expiration boundary without changing the approved default duration.
+
+## Phase 4A target leakage
+
+Inventory state and outcome columns may contain information that would not be known when making a future prediction. Future forecasting work must not use same-row demand, fulfilled demand, usage, unmet demand, expiration, waste, ending inventory, or stockout outcomes as input features for the target being predicted. Any future feature timing requires a separate approved design.
+
+Run Phase 4A with:
+
+```bash
+python -m smartstock.inventory
+```

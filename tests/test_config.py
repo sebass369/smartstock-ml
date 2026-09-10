@@ -14,10 +14,12 @@ from smartstock.config import (
     get_english_weekday,
     load_delivery_config,
     load_generation_config,
+    load_inventory_config,
     load_products_config,
     load_yaml,
     validate_delivery_config,
     validate_generation_config,
+    validate_inventory_config,
     validate_products_config,
 )
 
@@ -25,6 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS_PATH = PROJECT_ROOT / "config" / "products.yaml"
 DELIVERY_PATH = PROJECT_ROOT / "config" / "delivery.yaml"
 GENERATION_PATH = PROJECT_ROOT / "config" / "generation.yaml"
+INVENTORY_PATH = PROJECT_ROOT / "config" / "inventory.yaml"
 
 
 def test_english_weekday_names_are_explicit_and_monday_first():
@@ -50,10 +53,12 @@ def test_real_synthetic_configuration_loads_successfully():
     products_config = load_products_config(PRODUCTS_PATH)
     delivery_config = load_delivery_config(DELIVERY_PATH)
     generation_config = load_generation_config(GENERATION_PATH)
+    inventory_config = load_inventory_config(INVENTORY_PATH, products_config)
 
     assert "products" in products_config
     assert "delivery" in delivery_config
     assert "generation" in generation_config
+    assert "inventory" in inventory_config
 
 
 def test_exactly_nine_approved_product_aliases_are_present():
@@ -102,9 +107,7 @@ def test_provisional_fields_are_correctly_represented():
         assert isinstance(product["provisional_fields"], list)
 
     assert products["Whipped_Topping"]["provisional_fields"] == [
-        "pack_size_units",
         "open_shelf_life_days",
-        "unopened_shelf_life_days",
         "high_demand_days",
         "primary_risk",
     ]
@@ -112,6 +115,77 @@ def test_provisional_fields_are_correctly_represented():
     assert products["Oat_Beverage"]["demand_level"] == "low"
     assert "demand_level" not in products["Oat_Beverage"]["provisional_fields"]
     assert "high_demand_days" in products["Oat_Beverage"]["provisional_fields"]
+
+
+def test_approved_phase_4_product_values_are_exact():
+    products = {
+        product["product_id"]: product
+        for product in load_products_config(PRODUCTS_PATH)["products"]
+    }
+
+    assert (
+        products["Oat_Beverage"]["pack_size_units"],
+        products["Oat_Beverage"]["open_shelf_life_days"],
+        products["Oat_Beverage"]["unopened_shelf_life_days"],
+    ) == (6, 7, 60)
+    assert products["Whipped_Topping"]["pack_size_units"] == 6
+    assert products["Whipped_Topping"]["unopened_shelf_life_days"] == 60
+
+
+def test_inventory_configuration_contains_exact_approved_values():
+    products_config = load_products_config(PRODUCTS_PATH)
+    inventory_products = load_inventory_config(
+        INVENTORY_PATH,
+        products_config,
+    )["inventory"]["products"]
+
+    assert inventory_products == [
+        {
+            "product_id": "Milk_Product_A",
+            "starting_inventory_units": 8,
+            "delivery_pack_count": 16,
+        },
+        {
+            "product_id": "Milk_Product_B",
+            "starting_inventory_units": 12,
+            "delivery_pack_count": 11,
+        },
+        {
+            "product_id": "Whole_Milk",
+            "starting_inventory_units": 8,
+            "delivery_pack_count": 16,
+        },
+        {
+            "product_id": "Fruit_Refresher_A",
+            "starting_inventory_units": 16,
+            "delivery_pack_count": 8,
+        },
+        {
+            "product_id": "Fruit_Refresher_B",
+            "starting_inventory_units": 16,
+            "delivery_pack_count": 8,
+        },
+        {
+            "product_id": "Cold_Foam_A",
+            "starting_inventory_units": 6,
+            "delivery_pack_count": 11,
+        },
+        {
+            "product_id": "Whipped_Topping",
+            "starting_inventory_units": 6,
+            "delivery_pack_count": 11,
+        },
+        {
+            "product_id": "Skim_Milk",
+            "starting_inventory_units": 0,
+            "delivery_pack_count": 4,
+        },
+        {
+            "product_id": "Oat_Beverage",
+            "starting_inventory_units": 0,
+            "delivery_pack_count": 3,
+        },
+    ]
 
 
 def test_delivery_cycle_is_fourteen_days_and_tuesday_based():
@@ -493,3 +567,142 @@ def test_malformed_generation_yaml_uses_project_error_handling(tmp_path):
 
     with pytest.raises(ValueError, match="Malformed YAML configuration"):
         load_generation_config(config_path)
+
+
+def test_inventory_configuration_accepts_zero_and_non_pack_starting_units():
+    products_config = load_products_config(PRODUCTS_PATH)
+    config = deepcopy(load_inventory_config(INVENTORY_PATH, products_config))
+    config["inventory"]["products"][0]["starting_inventory_units"] = 3
+    config["inventory"]["products"][0]["delivery_pack_count"] = 0
+
+    validate_inventory_config(config, products_config)
+
+
+@pytest.mark.parametrize(
+    "invalid_value",
+    [True, False, 1.5, "1", -1],
+)
+@pytest.mark.parametrize(
+    "field_name",
+    ["starting_inventory_units", "delivery_pack_count"],
+)
+def test_inventory_integer_fields_reject_invalid_values(
+    field_name, invalid_value
+):
+    products_config = load_products_config(PRODUCTS_PATH)
+    config = deepcopy(load_inventory_config(INVENTORY_PATH, products_config))
+    config["inventory"]["products"][0][field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=field_name):
+        validate_inventory_config(config, products_config)
+
+
+def test_inventory_configuration_rejects_duplicate_product_ids():
+    products_config = load_products_config(PRODUCTS_PATH)
+    config = deepcopy(load_inventory_config(INVENTORY_PATH, products_config))
+    config["inventory"]["products"][1]["product_id"] = (
+        config["inventory"]["products"][0]["product_id"]
+    )
+
+    with pytest.raises(ValueError, match="must be unique"):
+        validate_inventory_config(config, products_config)
+
+
+def test_inventory_configuration_rejects_missing_product():
+    products_config = load_products_config(PRODUCTS_PATH)
+    config = deepcopy(load_inventory_config(INVENTORY_PATH, products_config))
+    config["inventory"]["products"].pop()
+
+    with pytest.raises(ValueError, match="exactly nine"):
+        validate_inventory_config(config, products_config)
+
+
+def test_inventory_configuration_rejects_unknown_product():
+    products_config = load_products_config(PRODUCTS_PATH)
+    config = deepcopy(load_inventory_config(INVENTORY_PATH, products_config))
+    config["inventory"]["products"][0]["product_id"] = "Unknown_Product"
+
+    with pytest.raises(ValueError, match="Unknown inventory product ID"):
+        validate_inventory_config(config, products_config)
+
+
+@pytest.mark.parametrize(
+    ("location", "field_name"),
+    [
+        ("top", "unexpected"),
+        ("inventory", "unexpected"),
+        ("product", "unexpected"),
+    ],
+)
+def test_inventory_configuration_rejects_unknown_fields(location, field_name):
+    products_config = load_products_config(PRODUCTS_PATH)
+    config = deepcopy(load_inventory_config(INVENTORY_PATH, products_config))
+    if location == "top":
+        config[field_name] = 1
+    elif location == "inventory":
+        config["inventory"][field_name] = 1
+    else:
+        config["inventory"]["products"][0][field_name] = 1
+
+    with pytest.raises(ValueError, match="unknown fields.*unexpected"):
+        validate_inventory_config(config, products_config)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["product_id", "starting_inventory_units", "delivery_pack_count"],
+)
+def test_inventory_configuration_rejects_missing_entry_fields(field_name):
+    products_config = load_products_config(PRODUCTS_PATH)
+    config = deepcopy(load_inventory_config(INVENTORY_PATH, products_config))
+    del config["inventory"]["products"][0][field_name]
+
+    with pytest.raises(ValueError, match=f"missing fields.*{field_name}"):
+        validate_inventory_config(config, products_config)
+
+
+@pytest.mark.parametrize("yaml_text", ["", "- inventory"])
+def test_inventory_yaml_top_level_must_be_a_mapping(tmp_path, yaml_text):
+    config_path = tmp_path / "inventory.yaml"
+    config_path.write_text(yaml_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must contain a mapping"):
+        load_inventory_config(config_path, load_products_config(PRODUCTS_PATH))
+
+
+def test_malformed_inventory_yaml_uses_project_error_handling(tmp_path):
+    config_path = tmp_path / "inventory.yaml"
+    config_path.write_text("inventory: [\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Malformed YAML configuration") as exc_info:
+        load_inventory_config(config_path, load_products_config(PRODUCTS_PATH))
+
+    assert isinstance(exc_info.value.__cause__, yaml.YAMLError)
+
+
+def test_missing_inventory_file_preserves_file_not_found_error(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        load_inventory_config(
+            tmp_path / "missing.yaml",
+            load_products_config(PRODUCTS_PATH),
+        )
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["pack_size_units", "unopened_shelf_life_days"],
+)
+def test_inventory_rejects_direct_phase_4_provisional_fields(field_name):
+    products_config = deepcopy(load_products_config(PRODUCTS_PATH))
+    products_config["products"][0]["provisional_fields"].append(field_name)
+    inventory_config = load_yaml(INVENTORY_PATH)
+
+    with pytest.raises(ValueError, match="cannot remain provisional"):
+        validate_inventory_config(inventory_config, products_config)
+
+
+def test_inventory_allows_provisional_phase_3_high_demand_days():
+    products_config = load_products_config(PRODUCTS_PATH)
+    inventory_config = load_yaml(INVENTORY_PATH)
+
+    validate_inventory_config(inventory_config, products_config)
