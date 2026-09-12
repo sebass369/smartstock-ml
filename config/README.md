@@ -1,6 +1,6 @@
 # Configuration
 
-This directory contains synthetic configuration for SmartStock ML Phases 2 through 4A.
+This directory contains synthetic configuration for SmartStock ML Phases 2 through 4B.
 The YAML files use only public product aliases and generalized delivery-cycle assumptions.
 
 ## Files
@@ -9,6 +9,7 @@ The YAML files use only public product aliases and generalized delivery-cycle as
 - `delivery.yaml` defines the synthetic 14-day Tuesday delivery cycle, the approximate 11:00 AM to 12:00 PM delivery window, and full-pack ordering constraints.
 - `generation.yaml` defines the Phase 3 start date, duration, default seed, inclusive low and high demand ranges, and high-demand-weekday adjustment.
 - `inventory.yaml` defines fixed synthetic starting inventory and delivery pack counts for the nine approved aliases. Pack sizes remain defined only in `products.yaml`.
+- `ordering.yaml` defines the approved previous-cycle baseline, cold-start behavior, expiration-credit rule, recommendation timing, and zero default safety-stock packs for all nine aliases.
 
 ## Synthetic modeling assumptions
 
@@ -28,6 +29,12 @@ The Phase 3 generator supports only `low` and `high` demand levels. `medium` is 
 Phase 4A directly uses `pack_size_units` and `unopened_shelf_life_days`, so those fields cannot remain provisional. It does not use open shelf life or primary risk. The already validated Phase 3 demand records may reflect provisional high-demand weekdays; that approved limitation remains explicit in `products.yaml`.
 
 Starting inventory may be any nonnegative integer and does not need to be a pack multiple. Delivery pack counts are fixed nonnegative integers used on every scheduled delivery date. They are synthetic scenario inputs, not ordering recommendations.
+
+Phase 4B derives pack sizes and shelf lives from `products.yaml` and the cycle
+length and delivery weekday from `delivery.yaml`. It does not duplicate those
+values in `ordering.yaml`. Ordering configuration rejects unknown fields,
+unsupported methods, invalid aliases, duplicate or incomplete product scope, and
+non-integer or negative safety-stock pack counts. Booleans are not integers.
 
 ## Privacy rules
 

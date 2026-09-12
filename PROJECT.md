@@ -284,3 +284,39 @@ ending_inventory_units = available_inventory_units - units_used
 A stockout occurs when demand is greater than available inventory and unmet demand is positive. All quantities are nonnegative integers. The separate Phase 4A CSV contains 504 records and preserves all six Phase 3 fields before adding inventory outcomes.
 
 The default run lasts 56 days, while every approved unopened shelf life is at least 60 days. Therefore, default `expired_units` and `waste_units` are zero. Focused tests with shorter synthetic shelf lives verify expiration behavior. Phase 4A does not implement machine learning, forecasting, optimization, a baseline ordering policy, or ordering recommendations.
+
+## 17. Approved Phase 4B baseline ordering assumptions
+
+Phase 4B implements a deterministic baseline ordering policy. On each eligible
+delivery date, the policy calculates a recommendation after same-day expiration
+and before delivery and demand. Version 1 uses a synthetic zero-day lead-time
+abstraction, so the recommendation date equals the delivery date and the
+recommended inventory is immediately available.
+
+The demand baseline is the sum of `demand_units` for the previous 14 completed
+dates. The window ends on the day before delivery and never includes current-day
+or future demand. Fulfilled demand and units used are not baseline inputs. The
+default safety stock is zero packs for every approved product.
+
+Current cohort units receive no inventory credit when their expiration date is
+strictly after the current delivery date and strictly before the next delivery
+date. A cohort expiring on the next delivery date remains credited because it is
+usable throughout the covered cycle. This conservative rule does not predict
+whether FIFO demand will consume a cohort before expiration and may increase
+inventory or waste.
+
+The first 14-day cycle is a common warm-up period. Both scenarios use the Phase
+4A fixed delivery on January 7, 2025, and no recommendation is produced for that
+date. Starting January 21, policy deliveries replace rather than supplement the
+fixed Phase 4A delivery quantities. The default recommendations occur on January
+21, February 4, and February 18, 2025, for 27 total records.
+
+Recommendations are written to a separate CSV. The Phase 3 and Phase 4A schemas
+and byte contracts remain unchanged. Fixed and policy scenarios are compared in
+memory from January 21 through the final simulation date using fulfilled demand,
+unmet demand, stockout events, waste, ending inventory, and delivered units and
+packs. Differences are policy values minus fixed values.
+
+The baseline is transparent scenario logic, not optimization, forecasting,
+machine learning, operational guidance, or evidence of real-world improvement.
+Phase 5 validation remains a separate project phase.

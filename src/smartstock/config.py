@@ -74,6 +74,23 @@ INVENTORY_PRODUCT_REQUIRED_FIELDS = {
     "starting_inventory_units",
     "delivery_pack_count",
 }
+ORDERING_REQUIRED_FIELDS = {
+    "baseline_method",
+    "cold_start_method",
+    "expiration_credit_method",
+    "recommendation_timing",
+    "products",
+}
+ORDERING_PRODUCT_REQUIRED_FIELDS = {
+    "product_id",
+    "safety_stock_packs",
+}
+SUPPORTED_BASELINE_METHOD = "previous_completed_cycle"
+SUPPORTED_COLD_START_METHOD = "no_recommendation"
+SUPPORTED_EXPIRATION_CREDIT_METHOD = (
+    "exclude_expiring_before_next_delivery"
+)
+SUPPORTED_RECOMMENDATION_TIMING = "delivery_day_before_receipt"
 PHASE_4_DIRECT_PRODUCT_FIELDS = {
     "pack_size_units",
     "unopened_shelf_life_days",
@@ -129,6 +146,17 @@ def load_inventory_config(
     """Load and validate fixed synthetic inventory inputs."""
     config = load_yaml(path)
     validate_inventory_config(config, products_config)
+    return config
+
+
+def load_ordering_config(
+    path: str | Path,
+    products_config: dict[str, Any],
+    delivery_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Load and validate the synthetic baseline ordering policy."""
+    config = load_yaml(path)
+    validate_ordering_config(config, products_config, delivery_config)
     return config
 
 
@@ -319,6 +347,78 @@ def validate_inventory_config(
                 "Phase 4 directly consumed fields cannot remain provisional for "
                 f"{product['product_id']}: {sorted(blocked_fields)}."
             )
+
+
+def validate_ordering_config(
+    config: dict[str, Any],
+    products_config: dict[str, Any],
+    delivery_config: dict[str, Any],
+) -> None:
+    """Validate the transparent Phase 4B ordering configuration."""
+    validate_products_config(products_config)
+    validate_delivery_config(delivery_config)
+    _validate_exact_fields(config, {"ordering"}, "Ordering YAML")
+    ordering = config.get("ordering")
+    if not isinstance(ordering, dict):
+        raise ValueError("Ordering configuration must contain an ordering mapping.")
+    _validate_exact_fields(
+        ordering,
+        ORDERING_REQUIRED_FIELDS,
+        "Ordering configuration",
+    )
+
+    expected_methods = {
+        "baseline_method": SUPPORTED_BASELINE_METHOD,
+        "cold_start_method": SUPPORTED_COLD_START_METHOD,
+        "expiration_credit_method": SUPPORTED_EXPIRATION_CREDIT_METHOD,
+        "recommendation_timing": SUPPORTED_RECOMMENDATION_TIMING,
+    }
+    for field_name, expected_value in expected_methods.items():
+        if ordering[field_name] != expected_value:
+            raise ValueError(
+                f"{field_name} must be the string '{expected_value}'."
+            )
+
+    ordering_products = ordering["products"]
+    if not isinstance(ordering_products, list):
+        raise ValueError("Ordering products must be a list.")
+    if len(ordering_products) != len(APPROVED_PRODUCT_IDS):
+        raise ValueError("Ordering configuration must contain exactly nine products.")
+
+    product_ids: list[str] = []
+    for entry in ordering_products:
+        if not isinstance(entry, dict):
+            raise ValueError("Each ordering product must be a mapping.")
+        _validate_exact_fields(
+            entry,
+            ORDERING_PRODUCT_REQUIRED_FIELDS,
+            f"Ordering product {entry.get('product_id')}",
+        )
+        product_id = entry["product_id"]
+        if not isinstance(product_id, str) or product_id not in APPROVED_PRODUCT_IDS:
+            raise ValueError(f"Unknown ordering product ID: {product_id}.")
+        product_ids.append(product_id)
+        safety_stock_packs = entry["safety_stock_packs"]
+        if (
+            isinstance(safety_stock_packs, bool)
+            or not isinstance(safety_stock_packs, int)
+            or safety_stock_packs < 0
+        ):
+            raise ValueError(
+                "safety_stock_packs must be a nonnegative integer for "
+                f"{product_id}."
+            )
+
+    if len(product_ids) != len(set(product_ids)):
+        raise ValueError("Ordering product IDs must be unique.")
+    configured_ids = set(product_ids)
+    if configured_ids != APPROVED_PRODUCT_IDS:
+        extra_ids = configured_ids - APPROVED_PRODUCT_IDS
+        missing_ids = APPROVED_PRODUCT_IDS - configured_ids
+        raise ValueError(
+            "Ordering product IDs must match the approved public aliases. "
+            f"Extra: {sorted(extra_ids)}. Missing: {sorted(missing_ids)}."
+        )
 
 
 def _validate_product(product: Any) -> None:

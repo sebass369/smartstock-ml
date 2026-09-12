@@ -4,11 +4,13 @@ SmartStock ML is a privacy-safe Python portfolio project for studying retail inv
 
 ## Privacy statement
 
+This project was inspired by common inventory-planning challenges I observed while working a part-time food-service job. All products, quantities, records, and scenarios in this repository are synthetic or represented through public aliases. The project contains no employer, store, employee, customer, vendor, or private operational data.
+
 This repository must use only synthetic and anonymized data. Do not add employer names, brand names, store numbers, exact locations, employee names, customer names, vendor names, private URLs, credentials, real invoices, delivery documents, screenshots, or operational records.
 
 ## Current project status
 
-The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, and a Phase 4A deterministic inventory simulator. Phase 4A adds fixed starting inventory, fixed full-pack deliveries, FIFO fulfillment, unopened expiration, waste, and stockout outcomes. The Phase 4B baseline ordering policy is postponed.
+The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, and a Phase 4B baseline ordering policy. Phase 4B uses the previous completed 14-day demand cycle, zero default safety stock, conservative expiration credit, and full-pack rounding.
 
 ## Planned repository structure
 
@@ -73,10 +75,35 @@ The default 56-day run has zero expiration and waste because every approved unop
 
 Python 3.12 is the project baseline. Phase 3 is also verified with Python 3.13 when that interpreter is available.
 
+## Generating baseline order recommendations
+
+Run the separate Phase 4B CLI from the repository root:
+
+```bash
+python -m smartstock.ordering
+```
+
+The default command writes `data/generated/synthetic_order_recommendations.csv`.
+It produces 27 deterministic records for the three eligible delivery dates after
+the first 14-day warm-up cycle. Use `--seed` to override the demand seed or
+`--output` to select another path.
+
+The recommendation checkpoint occurs after same-day expiration and before
+delivery and demand. The baseline sums `demand_units` from the previous 14
+completed dates. Current-day and future demand are excluded. Default safety stock
+is zero. Current cohorts expiring before the next delivery receive no inventory
+credit, and positive unit requirements are rounded up to full packs.
+
+The CLI also prints an in-memory comparison between the unchanged fixed Phase 4A
+scenario and the policy scenario from day 14 onward. The comparison reports
+fulfilled demand, unmet demand, stockout events, waste, ending inventory, and
+delivered units and packs. It describes one synthetic scenario and does not show
+that the policy is optimal or would improve real operations.
+
 ## Current limitations
 
 - Generated demand is synthetic and is not operational or food-safety guidance.
 - `demand_units` is a future prediction target and must not be used to predict demand for the same row.
-- No baseline ordering policy or ordering recommendations are implemented yet.
 - No forecasting, optimization, dashboard, deployment, or notebook analysis is implemented yet.
 - Phase 4A outcome columns describe results after demand and inventory transitions. They must not be used as same-row features in future prediction tasks.
+- Phase 4B uses a synthetic zero-day lead time and a conservative expiration-credit rule. These assumptions are transparent simplifications, not operational guidance.

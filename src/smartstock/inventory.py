@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Callable
 
 from smartstock.config import (
     APPROVED_PRODUCT_IDS,
@@ -59,6 +59,9 @@ class _InventoryCohort:
     expires_on: date
 
 
+DeliveryUnitsResolver = Callable[[date, str, int, int, bool], int]
+
+
 def simulate_inventory(
     demand_records: list[dict[str, object]],
     products_config: dict[str, object],
@@ -71,6 +74,98 @@ def simulate_inventory(
     validate_inventory_config(inventory_config, products_config)
     _validate_demand_records(demand_records, products_config, delivery_config)
 
+    product_by_id = {
+        _string(product["product_id"], "product_id"): product
+        for product in _product_list(products_config["products"])
+    }
+    inventory_by_id = _inventory_by_id(inventory_config)
+
+    def fixed_delivery_resolver(
+        _delivery_date: date,
+        product_id: str,
+        _current_usable_inventory_units: int,
+        _units_expiring_before_next_delivery: int,
+        _is_first_delivery: bool,
+    ) -> int:
+        pack_size_units = _integer(
+            product_by_id[product_id]["pack_size_units"],
+            "pack_size_units",
+        )
+        delivery_pack_count = _integer(
+            inventory_by_id[product_id]["delivery_pack_count"],
+            "delivery_pack_count",
+        )
+        return delivery_pack_count * pack_size_units
+
+    records = _simulate_inventory_with_delivery_resolver(
+        demand_records,
+        products_config,
+        delivery_config,
+        inventory_config,
+        fixed_delivery_resolver,
+    )
+    validate_inventory_records(
+        records,
+        demand_records,
+        products_config,
+        delivery_config,
+        inventory_config,
+    )
+    return records
+
+
+def simulate_inventory_with_delivery_resolver(
+    demand_records: list[dict[str, object]],
+    products_config: dict[str, object],
+    delivery_config: dict[str, object],
+    inventory_config: dict[str, object],
+    delivery_units_resolver: DeliveryUnitsResolver,
+) -> list[dict[str, object]]:
+    """Simulate inventory with deterministic delivery decisions."""
+    validate_products_config(products_config)
+    validate_delivery_config(delivery_config)
+    validate_inventory_config(inventory_config, products_config)
+    _validate_demand_records(demand_records, products_config, delivery_config)
+    if not callable(delivery_units_resolver):
+        raise ValueError("delivery_units_resolver must be callable.")
+
+    records = _simulate_inventory_with_delivery_resolver(
+        demand_records,
+        products_config,
+        delivery_config,
+        inventory_config,
+        delivery_units_resolver,
+    )
+    validate_inventory_scenario_records(
+        records,
+        demand_records,
+        products_config,
+        delivery_config,
+        inventory_config,
+    )
+    return records
+
+
+def validate_inventory_demand_records(
+    demand_records: list[dict[str, object]],
+    products_config: dict[str, object],
+    delivery_config: dict[str, object],
+) -> None:
+    """Validate demand records accepted by the shared inventory engine."""
+    validate_products_config(products_config)
+    validate_delivery_config(delivery_config)
+    _validate_demand_records(demand_records, products_config, delivery_config)
+
+
+def _simulate_inventory_with_delivery_resolver(
+    demand_records: list[dict[str, object]],
+    products_config: dict[str, object],
+    delivery_config: dict[str, object],
+    inventory_config: dict[str, object],
+    delivery_units_resolver: DeliveryUnitsResolver,
+) -> list[dict[str, object]]:
+    """Run the shared FIFO engine for fixed or policy deliveries."""
+
     products = _product_list(products_config["products"])
     product_by_id = {
         _string(product["product_id"], "product_id"): product
@@ -81,6 +176,11 @@ def simulate_inventory(
         product_id: [] for product_id in product_by_id
     }
     product_count = len(products)
+    delivery = _mapping(delivery_config["delivery"], "delivery")
+    cycle_length_days = _integer(
+        delivery["cycle_length_days"],
+        "cycle_length_days",
+    )
     records: list[dict[str, object]] = []
 
     for record_index, demand_record in enumerate(demand_records):
@@ -108,15 +208,31 @@ def simulate_inventory(
         expired_units = _remove_expired_cohorts(cohorts, current_date)
         delivered_units = 0
         if demand_record["delivery_event"] is True:
-            delivery_pack_count = _integer(
-                inventory_entry["delivery_pack_count"],
-                "delivery_pack_count",
-            )
             pack_size_units = _integer(
                 product["pack_size_units"],
                 "pack_size_units",
             )
-            delivered_units = delivery_pack_count * pack_size_units
+            next_delivery_date = current_date + timedelta(days=cycle_length_days)
+            units_expiring_before_next_delivery = sum(
+                cohort.remaining_units
+                for cohort in cohorts
+                if current_date < cohort.expires_on < next_delivery_date
+            )
+            delivered_units = delivery_units_resolver(
+                current_date,
+                product_id,
+                _cohort_total(cohorts),
+                units_expiring_before_next_delivery,
+                record_index < product_count,
+            )
+            if isinstance(delivered_units, bool) or not isinstance(
+                delivered_units, int
+            ):
+                raise ValueError("Resolved delivered units must be an integer.")
+            if delivered_units < 0:
+                raise ValueError("Resolved delivered units cannot be negative.")
+            if delivered_units % pack_size_units != 0:
+                raise ValueError("Resolved delivered units must use full packs.")
             if delivered_units > 0:
                 cohorts.append(
                     _create_cohort(
@@ -154,13 +270,6 @@ def simulate_inventory(
             }
         )
 
-    validate_inventory_records(
-        records,
-        demand_records,
-        products_config,
-        delivery_config,
-        inventory_config,
-    )
     return records
 
 
@@ -172,6 +281,42 @@ def validate_inventory_records(
     inventory_config: dict[str, object],
 ) -> None:
     """Validate Phase 4A record order, types, quantities, and balances."""
+    _validate_inventory_records(
+        records,
+        demand_records,
+        products_config,
+        delivery_config,
+        inventory_config,
+        require_fixed_deliveries=True,
+    )
+
+
+def validate_inventory_scenario_records(
+    records: list[dict[str, object]],
+    demand_records: list[dict[str, object]],
+    products_config: dict[str, object],
+    delivery_config: dict[str, object],
+    inventory_config: dict[str, object],
+) -> None:
+    """Validate inventory balances for a deterministic delivery scenario."""
+    _validate_inventory_records(
+        records,
+        demand_records,
+        products_config,
+        delivery_config,
+        inventory_config,
+        require_fixed_deliveries=False,
+    )
+
+
+def _validate_inventory_records(
+    records: list[dict[str, object]],
+    demand_records: list[dict[str, object]],
+    products_config: dict[str, object],
+    delivery_config: dict[str, object],
+    inventory_config: dict[str, object],
+    require_fixed_deliveries: bool,
+) -> None:
     validate_products_config(products_config)
     validate_delivery_config(delivery_config)
     validate_inventory_config(inventory_config, products_config)
@@ -234,16 +379,19 @@ def validate_inventory_records(
             inventory_entry["delivery_pack_count"],
             "delivery_pack_count",
         )
-        expected_delivery = (
-            delivery_pack_count * pack_size_units
-            if record["delivery_event"] is True
-            else 0
-        )
         delivered_units = _integer(record["delivered_units"], "delivered_units")
-        if delivered_units != expected_delivery:
-            raise ValueError(
-                "delivered_units must match the configured delivery quantity."
+        if require_fixed_deliveries:
+            expected_delivery = (
+                delivery_pack_count * pack_size_units
+                if record["delivery_event"] is True
+                else 0
             )
+            if delivered_units != expected_delivery:
+                raise ValueError(
+                    "delivered_units must match the configured delivery quantity."
+                )
+        elif record["delivery_event"] is not True and delivered_units != 0:
+            raise ValueError("Deliveries may occur only on delivery events.")
         if delivered_units % pack_size_units != 0:
             raise ValueError("delivered_units must be a full-pack multiple.")
 

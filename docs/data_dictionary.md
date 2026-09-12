@@ -130,3 +130,72 @@ Run Phase 4A with:
 ```bash
 python -m smartstock.inventory
 ```
+
+## Phase 4B purpose and timing
+
+Phase 4B creates full-pack baseline order recommendations. The first 14-day cycle
+is a shared warm-up using the Phase 4A fixed delivery on January 7, 2025. The
+first recommendation occurs on January 21. Recommendations are also produced on
+February 4 and February 18, giving 27 default records.
+
+At each eligible delivery date, carried cohorts expire first. The policy then
+measures usable inventory and calculates a recommendation before receipt and
+current-day demand. The synthetic Version 1 lead time is zero days, so
+`recommendation_date` equals `delivery_date`.
+
+The baseline uses exactly the previous 14 completed `demand_units` values for the
+product. It never uses current-day or future demand, fulfilled demand, units used,
+or later inventory outcomes.
+
+## Phase 4B recommendation CSV contract
+
+The separate default output is
+`data/generated/synthetic_order_recommendations.csv`. Columns always appear in
+this order:
+
+| Column | Type | Meaning and validation |
+| --- | --- | --- |
+| `recommendation_date` | ISO date string | Synthetic decision date; equal to the delivery date. |
+| `delivery_date` | ISO date string | Eligible 14-day Tuesday delivery date. |
+| `history_start_date` | ISO date string | Delivery date minus 14 days. |
+| `history_end_date` | ISO date string | Day immediately before delivery. |
+| `product_id` | string | One approved public product alias. |
+| `baseline_demand_units` | integer | Sum of the product's demand over the exact completed history window. |
+| `safety_stock_units` | integer | Configured safety-stock packs multiplied by product pack size; zero by default. |
+| `current_usable_inventory_units` | integer | Cohort total after same-day expiration and before receipt. |
+| `units_expiring_before_next_delivery` | integer | Current cohort units expiring strictly before the next delivery date. |
+| `usable_inventory_position_units` | integer | Current usable units minus conservatively excluded expiring units, clamped at zero. |
+| `net_order_units` | integer | Target units minus usable inventory position, clamped at zero. |
+| `pack_size_units` | integer | Positive pack size read from `products.yaml`. |
+| `recommended_order_packs` | integer | Smallest nonnegative full-pack count covering net order units. |
+| `recommended_order_units` | integer | Recommended packs multiplied by pack size. |
+
+All numeric fields are decimal nonnegative integers. The file uses UTF-8 without
+a byte-order mark, LF line endings, and one final LF. Rows use stable delivery
+date order and `products.yaml` product order.
+
+## Phase 4B expiration limitation
+
+A current cohort receives zero inventory credit when its expiration date is
+strictly between the current and next delivery dates. A cohort expiring on the
+next delivery date remains credited. The policy does not predict whether FIFO
+demand could consume earlier-expiring inventory. This transparent conservative
+rule may add inventory or waste and is not an optimization claim.
+
+## Phase 4B leakage boundary
+
+For delivery date `D`, only demand from `D - 14` through `D - 1` may influence
+the recommendation. Demand and inventory outcomes on `D` or later cannot be
+read. Cohort receipt and expiration dates, current post-expiration inventory,
+pack sizes, delivery-cycle configuration, and approved safety-stock settings are
+known at the checkpoint.
+
+The CLI compares the fixed and policy scenarios in memory beginning on day 14.
+It does not write a comparison CSV. Results describe one synthetic scenario and
+do not establish real-world improvement or an optimal policy.
+
+Run Phase 4B with:
+
+```bash
+python -m smartstock.ordering
+```
