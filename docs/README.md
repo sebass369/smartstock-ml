@@ -8,4 +8,7 @@ This directory contains project assumptions, privacy rules, the Phase 3 through 
 warm-up behavior, conservative expiration rule, and synthetic scenario
 comparison in student-friendly language.
 
+`phase_5_validation.md` records the Phase 5 validation scope, regression
+anchors, automated checks, manual review boundaries, and excluded behavior.
+
 All documentation must stay privacy-safe. Do not add real operational data, private documents, store identifiers, company names, credentials, or internal records.

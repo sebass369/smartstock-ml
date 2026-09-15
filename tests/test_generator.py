@@ -274,20 +274,26 @@ def test_csv_uses_exact_portable_bytes(default_records, tmp_path):
         assert fields[5] in {b"true", b"false"}
 
 
-def test_writer_rejects_record_with_wrong_key_order(default_records, tmp_path):
+def test_generator_csv_writer_validates_all_rows_before_creating_output(
+    default_records,
+    tmp_path,
+):
     invalid_records = deepcopy(default_records)
-    first_record = invalid_records[0]
-    invalid_records[0] = {
-        "weekday": first_record["weekday"],
-        "date": first_record["date"],
-        "product_id": first_record["product_id"],
-        "is_high_demand_day": first_record["is_high_demand_day"],
-        "demand_units": first_record["demand_units"],
-        "delivery_event": first_record["delivery_event"],
+    final_record = invalid_records[-1]
+    invalid_records[-1] = {
+        "weekday": final_record["weekday"],
+        "date": final_record["date"],
+        "product_id": final_record["product_id"],
+        "is_high_demand_day": final_record["is_high_demand_day"],
+        "demand_units": final_record["demand_units"],
+        "delivery_event": final_record["delivery_event"],
     }
+    output_path = tmp_path / "records.csv"
 
     with pytest.raises(ValueError, match="exact column order"):
-        write_records_csv(invalid_records, tmp_path / "records.csv")
+        write_records_csv(invalid_records, output_path)
+
+    assert not output_path.exists()
 
 
 def test_csv_contains_no_private_or_operational_fields(default_records, tmp_path):
