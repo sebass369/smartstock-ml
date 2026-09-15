@@ -10,7 +10,7 @@ This repository must use only synthetic and anonymized data. Do not add employer
 
 ## Current project status
 
-The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, and a Phase 4B baseline ordering policy. Phase 4B uses the previous completed 14-day demand cycle, zero default safety stock, conservative expiration credit, and full-pack rounding.
+The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, and Phase 5 validation hardening. Phase 5 adds focused regression protection, documents validation boundaries, and runs the test suite automatically on Python 3.12 without changing valid Phase 3, Phase 4A, or Phase 4B output contracts.
 
 ## Planned repository structure
 

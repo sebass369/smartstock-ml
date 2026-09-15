@@ -205,6 +205,7 @@ def write_records_csv(
     output_path: Path,
 ) -> None:
     """Write records as deterministic UTF-8 CSV with lowercase Booleans."""
+    _validate_csv_record_shapes(records)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as csv_file:
         writer = csv.DictWriter(
@@ -214,8 +215,6 @@ def write_records_csv(
         )
         writer.writeheader()
         for record in records:
-            if list(record) != list(RECORD_COLUMNS):
-                raise ValueError("CSV records must use the exact column order.")
             writer.writerow(
                 {
                     column: _csv_value(record[column])
@@ -307,6 +306,12 @@ def _integer(value: object, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"{field_name} must be an integer.")
     return value
+
+
+def _validate_csv_record_shapes(records: list[dict[str, object]]) -> None:
+    for record in records:
+        if not isinstance(record, dict) or tuple(record) != RECORD_COLUMNS:
+            raise ValueError("CSV records must use the exact column order.")
 
 
 def _csv_value(value: object) -> object:

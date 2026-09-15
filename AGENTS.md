@@ -117,7 +117,7 @@ python -m pytest -q
 Run a focused test file:
 
 ```bash
-python -m pytest -q tests/test_data_generator.py
+python -m pytest -q tests/test_generator.py
 ```
 
 ## Definition of Done

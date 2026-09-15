@@ -129,6 +129,29 @@ def test_order_formula_never_returns_negative_recommendation():
     assert recommendation["recommended_order_units"] == 0
 
 
+def test_nonzero_safety_stock_increases_target_and_full_pack_recommendation():
+    recommendation = calculate_order_recommendation(
+        date(2025, 1, 21),
+        "Milk_Product_A",
+        baseline_cycle_demand_units=9,
+        safety_stock_packs=2,
+        current_usable_inventory_units=5,
+        units_expiring_before_next_delivery=1,
+        pack_size_units=4,
+        cycle_length_days=14,
+    )
+
+    assert recommendation["safety_stock_units"] == 8
+    assert (
+        recommendation["baseline_demand_units"]
+        + recommendation["safety_stock_units"]
+    ) == 17
+    assert recommendation["usable_inventory_position_units"] == 4
+    assert recommendation["net_order_units"] == 13
+    assert recommendation["recommended_order_packs"] == 4
+    assert recommendation["recommended_order_units"] == 16
+
+
 def test_default_policy_creates_exactly_twenty_seven_recommendations(
     default_policy_result,
 ):
@@ -263,7 +286,11 @@ def test_historical_demand_changes_relevant_recommendation(
         ordering,
     )[1]
 
-    assert changed_recommendations[0] != default_policy_result[1][0]
+    original_recommendation = default_policy_result[1][0]
+    changed_recommendation = changed_recommendations[0]
+    assert changed_recommendation["baseline_demand_units"] == (
+        original_recommendation["baseline_demand_units"] + 20
+    )
 
 
 def test_reordered_demand_records_fail_before_recommendation(
@@ -708,6 +735,45 @@ def test_scenario_comparison_has_required_metrics_and_deltas(
         products,
         date(2025, 1, 21),
     )
+
+
+def test_default_scenario_comparison_matches_approved_overall_metrics(
+    configurations,
+    default_demand_records,
+    default_policy_result,
+):
+    products, delivery, _, inventory, _ = configurations
+    fixed_records = simulate_inventory(
+        default_demand_records,
+        products,
+        delivery,
+        inventory,
+    )
+    comparison = compare_scenarios(
+        fixed_records,
+        default_policy_result[0],
+        products,
+        date(2025, 1, 21),
+    )
+
+    assert comparison["fixed"]["overall"] == {
+        "total_fulfilled_demand_units": 1443,
+        "total_unmet_demand_units": 0,
+        "stockout_event_count": 0,
+        "total_waste_units": 0,
+        "ending_inventory_units": 111,
+        "total_delivered_units": 1464,
+        "total_delivered_packs": 264,
+    }
+    assert comparison["policy"]["overall"] == {
+        "total_fulfilled_demand_units": 1407,
+        "total_unmet_demand_units": 36,
+        "stockout_event_count": 12,
+        "total_waste_units": 0,
+        "ending_inventory_units": 7,
+        "total_delivered_units": 1324,
+        "total_delivered_packs": 237,
+    }
 
 
 def test_delivered_pack_summary_uses_each_product_pack_size(
