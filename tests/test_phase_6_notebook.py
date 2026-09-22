@@ -40,6 +40,11 @@ def test_phase_6_notebook_has_required_ordered_sections() -> None:
     assert notebook["nbformat"] == 4
     cells = notebook["cells"]
     assert isinstance(cells, list)
+    assert len(cells) == 24
+    assert all(isinstance(cell, dict) for cell in cells)
+    cell_ids = [cell.get("id") for cell in cells]
+    assert all(isinstance(cell_id, str) and cell_id for cell_id in cell_ids)
+    assert len(cell_ids) == len(set(cell_ids))
     markdown = "\n".join(
         _cell_source(cell)
         for cell in cells
