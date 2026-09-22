@@ -10,7 +10,7 @@ This repository must use only synthetic and anonymized data. Do not add employer
 
 ## Current project status
 
-The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, and Phase 5 validation hardening. Phase 5 adds focused regression protection, documents validation boundaries, and runs the test suite automatically on Python 3.12 without changing valid Phase 3, Phase 4A, or Phase 4B output contracts.
+The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, Phase 5 validation hardening, and a Phase 6 exploratory analysis notebook. Phase 6 demonstrates the existing deterministic pipeline in Google Colab without changing valid Phase 3, Phase 4A, or Phase 4B behavior.
 
 ## Planned repository structure
 
@@ -18,7 +18,7 @@ The project contains the Phase 1 Python foundation, Phase 2 validated configurat
 - `tests/`: automated tests.
 - `config/`: validated synthetic product and delivery configuration.
 - `docs/`: assumptions, privacy rules, the data dictionary, and future project decisions.
-- `notebooks/`: future Google Colab demonstrations that import reusable code.
+- `notebooks/`: Google Colab demonstrations that import reusable code.
 - `data/generated/`: generated CSV files are ignored by Git while `.gitkeep` remains tracked.
 - `data/sample/`: future small privacy-safe synthetic examples.
 
@@ -34,6 +34,25 @@ Install the project in editable mode with development dependencies:
 ```bash
 python -m pip install -e ".[dev]"
 ```
+
+Install the optional analysis dependencies when working with the Phase 6
+notebook:
+
+```bash
+python -m pip install -e ".[dev,analysis]"
+```
+
+## Exploring the synthetic scenarios
+
+Open the [Phase 6 exploratory analysis notebook](notebooks/phase_6_exploratory_analysis.ipynb)
+in Google Colab. The notebook loads validated configuration, generates all
+records in memory with seed 42, and compares the fixed and baseline-policy
+inventory scenarios. It does not require generated CSV files, private uploads,
+or Google Drive access.
+
+The notebook is committed without saved outputs. All displayed values and
+charts are synthetic and do not demonstrate optimal ordering or real-world
+operational performance.
 
 ## Running tests
 
@@ -104,6 +123,7 @@ that the policy is optimal or would improve real operations.
 
 - Generated demand is synthetic and is not operational or food-safety guidance.
 - `demand_units` is a future prediction target and must not be used to predict demand for the same row.
-- No forecasting, optimization, dashboard, deployment, or notebook analysis is implemented yet.
+- No forecasting, machine learning, optimization, dashboard, or deployment is implemented yet.
+- Phase 6 provides descriptive analysis only; predictive modeling remains a separate Phase 7 task.
 - Phase 4A outcome columns describe results after demand and inventory transitions. They must not be used as same-row features in future prediction tasks.
 - Phase 4B uses a synthetic zero-day lead time and a conservative expiration-credit rule. These assumptions are transparent simplifications, not operational guidance.
