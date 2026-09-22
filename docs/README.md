@@ -11,4 +11,9 @@ comparison in student-friendly language.
 `phase_5_validation.md` records the Phase 5 validation scope, regression
 anchors, automated checks, manual review boundaries, and excluded behavior.
 
+The Phase 6 exploratory analysis is available in
+[`notebooks/phase_6_exploratory_analysis.ipynb`](../notebooks/phase_6_exploratory_analysis.ipynb).
+It demonstrates the existing deterministic pipeline with synthetic in-memory
+records and does not introduce forecasting, machine learning, or optimization.
+
 All documentation must stay privacy-safe. Do not add real operational data, private documents, store identifiers, company names, credentials, or internal records.
