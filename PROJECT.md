@@ -195,8 +195,12 @@ Development must follow a controlled sequence:
    - Validate data rules, inventory balance, non-negative values, and pack-size constraints.
 6. **Phase 6: Exploratory analysis notebook**
    - Use Google Colab for demonstrations and visual analysis while keeping business logic in reusable Python code.
-7. **Phase 7: Simple forecasting model**
-   - Add a simple forecasting model after the baseline and validation rules are working.
+7. **Phase 7A: Baseline Forecast Evaluation**
+   - Compare a previous completed cycle baseline with an expanding weekday-mean
+     candidate after the ordering baseline and validation rules are working.
+   - Neither Phase 7A method is a trained machine-learning model.
+   - **Phase 7B: Simple Machine Learning Model** is future work and is not
+     implemented in Phase 7A.
 8. **Phase 8: Portfolio documentation and optional dashboard**
    - Improve public documentation and consider an optional dashboard only after the earlier phases are complete.
 
@@ -320,3 +324,48 @@ packs. Differences are policy values minus fixed values.
 The baseline is transparent scenario logic, not optimization, forecasting,
 machine learning, operational guidance, or evidence of real-world improvement.
 Phase 5 validation remains a separate project phase.
+
+## 18. Approved Phase 7A baseline forecast evaluation assumptions
+
+Phase 7A evaluates deterministic 14-day demand forecasts independently for all
+nine approved products. A forecast is created on each eligible delivery date
+after one completed 14-day warm-up cycle. The forecast origin is before demand
+on that date, and the target covers the origin through the following 13 days.
+Only origins with a complete historical cycle and complete future target cycle
+are evaluated.
+
+The default 56-day dataset produces forecasts on January 21, February 4, and
+February 18, 2025. This gives 27 records in stable forecast-origin order and
+`products.yaml` product order. Training history expands from January 7 through
+the day before each origin.
+
+The naive baseline is the sum of `demand_units` over the previous completed
+14-day cycle. The candidate predicts each target date from the product's mean
+demand on the same weekday using only dates before the forecast origin, then
+sums those daily estimates over the target cycle. Forecasts remain in memory;
+Phase 7A does not add a forecast CLI or generated prediction CSV.
+
+The previous completed cycle baseline and expanding weekday-mean candidate are
+transparent statistical methods. Neither method is a trained machine-learning
+model. Phase 7B — Simple Machine Learning Model is future work only; Phase 7A
+does not implement Ridge regression, scikit-learn, or other machine-learning
+behavior.
+
+The primary metric is mean absolute error in demand units. Weighted absolute
+percentage error is calculated exactly as
+`100.0 * sum(abs(actual - prediction)) / sum(actual)` and may exceed 100.0. If
+total actual demand is zero, WAPE is unavailable and represented by `None`.
+Candidate and baseline metric values are ties only when
+`math.isclose(candidate, baseline, rel_tol=0.0, abs_tol=1e-9)` is true. No
+passing threshold or combined accuracy score is approved.
+
+Forecasting may use approved aliases, calendar dates, weekdays, and historical
+`demand_units` from dates strictly before the forecast origin. It does not use
+same-day or future demand; `is_high_demand_day`; fulfillment, inventory,
+stockout, expiration, or waste outcomes; or ordering recommendations as model
+inputs.
+
+Phase 7A evaluates demand forecasts only. It does not replace the Phase 4B
+baseline, feed predictions into ordering, change inventory simulation, add
+optimization, or claim real-world performance. All results describe the small
+deterministic synthetic dataset and its configured random seed.
