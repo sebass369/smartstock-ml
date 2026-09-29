@@ -10,7 +10,7 @@ This repository must use only synthetic and anonymized data. Do not add employer
 
 ## Current project status
 
-The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, Phase 5 validation hardening, and a Phase 6 exploratory analysis notebook. Phase 6 demonstrates the existing deterministic pipeline in Google Colab without changing valid Phase 3, Phase 4A, or Phase 4B behavior.
+The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, Phase 5 validation hardening, a Phase 6 exploratory analysis notebook, and Phase 7A — Baseline Forecast Evaluation. Phase 7A compares a previous completed cycle baseline with an expanding weekday-mean candidate without changing valid Phase 3 through Phase 6 behavior. Neither method is a trained machine-learning model.
 
 ## Planned repository structure
 
@@ -61,6 +61,25 @@ Run the test suite with:
 ```bash
 python -m pytest -q
 ```
+
+## Phase 7A — Baseline Forecast Evaluation
+
+Phase 7A creates in-memory forecasts for each approved product at the three
+delivery dates after the first 14-day warm-up cycle. Each record predicts total
+synthetic demand for the next complete 14-day cycle.
+
+The naive baseline uses the previous completed cycle. The candidate sums
+expanding historical weekday means. Both methods use only demand observed before
+the forecast origin. Evaluation reports MAE in demand units, WAPE as a percentage,
+and product-level candidate wins, ties, and losses. There is no passing accuracy
+threshold and no combined accuracy score.
+
+See [the Phase 7A forecasting design](docs/forecasting.md) and the separate
+[Phase 7A notebook](notebooks/phase_7_forecasting.ipynb). Forecast records remain
+in memory; Phase 7A adds no CLI or generated prediction CSV.
+
+Phase 7B — Simple Machine Learning Model is future work only. Phase 7A does not
+implement Ridge regression, scikit-learn, or other machine-learning behavior.
 
 ## Generating synthetic demand
 
@@ -123,7 +142,9 @@ that the policy is optimal or would improve real operations.
 
 - Generated demand is synthetic and is not operational or food-safety guidance.
 - `demand_units` is a future prediction target and must not be used to predict demand for the same row.
-- No forecasting, machine learning, optimization, dashboard, or deployment is implemented yet.
-- Phase 6 provides descriptive analysis only; predictive modeling remains a separate Phase 7 task.
+- Phase 7A uses two transparent statistical forecasts. Neither method is a
+  trained machine-learning model, and Phase 7B remains future work.
+- Phase 6 remains descriptive analysis only. Predictive evaluation is isolated
+  in the Phase 7A module and notebook.
 - Phase 4A outcome columns describe results after demand and inventory transitions. They must not be used as same-row features in future prediction tasks.
 - Phase 4B uses a synthetic zero-day lead time and a conservative expiration-credit rule. These assumptions are transparent simplifications, not operational guidance.
