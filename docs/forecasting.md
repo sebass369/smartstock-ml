@@ -8,8 +8,9 @@ simulation, ordering recommendations, or the Phase 4B policy.
 
 Phase 7A compares the previous completed cycle baseline with the expanding
 weekday-mean candidate. Neither method is a trained machine-learning model.
-Phase 7B — Simple Machine Learning Model is future work only. Phase 7A does not
-implement Ridge regression, scikit-learn, or other machine-learning behavior.
+Phase 7A itself does not implement Ridge regression, scikit-learn, or other
+machine-learning behavior. Phase 7B implements the trained model separately and
+is documented in `ml_forecasting.md`.
 
 All records and results are synthetic. They do not establish real-world
 accuracy, operational benefit, or ordering performance.

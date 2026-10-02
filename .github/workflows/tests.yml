@@ -25,8 +25,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install development dependencies
-        run: python -m pip install -e ".[dev]"
+      - name: Install development and machine learning dependencies
+        run: python -m pip install -e ".[dev,ml]"
 
       - name: Run tests
         run: python -m pytest -q
