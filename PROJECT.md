@@ -199,8 +199,9 @@ Development must follow a controlled sequence:
    - Compare a previous completed cycle baseline with an expanding weekday-mean
      candidate after the ordering baseline and validation rules are working.
    - Neither Phase 7A method is a trained machine-learning model.
-   - **Phase 7B: Simple Machine Learning Model** is future work and is not
-     implemented in Phase 7A.
+   - **Phase 7B: Simple Machine Learning Model** trains one global linear
+     regression on daily demand and compares it against both Phase 7A methods
+     on the same evaluation records.
 8. **Phase 8: Portfolio documentation and optional dashboard**
    - Improve public documentation and consider an optional dashboard only after the earlier phases are complete.
 
@@ -347,9 +348,9 @@ Phase 7A does not add a forecast CLI or generated prediction CSV.
 
 The previous completed cycle baseline and expanding weekday-mean candidate are
 transparent statistical methods. Neither method is a trained machine-learning
-model. Phase 7B — Simple Machine Learning Model is future work only; Phase 7A
-does not implement Ridge regression, scikit-learn, or other machine-learning
-behavior.
+model. Phase 7A itself does not implement Ridge regression, scikit-learn, or
+other machine-learning behavior. Phase 7B implements the trained model
+separately under the assumptions approved in section 19.
 
 The primary metric is mean absolute error in demand units. Weighted absolute
 percentage error is calculated exactly as
@@ -368,4 +369,83 @@ inputs.
 Phase 7A evaluates demand forecasts only. It does not replace the Phase 4B
 baseline, feed predictions into ordering, change inventory simulation, add
 optimization, or claim real-world performance. All results describe the small
+deterministic synthetic dataset and its configured random seed.
+
+## 19. Approved Phase 7B simple machine learning assumptions
+
+Phase 7B adds the project's first trained machine-learning model. It reuses the
+three approved Phase 7A forecast origins, the 27 product-cycle evaluation
+records, and the existing MAE, WAPE, and tie behavior without modification. The
+frozen Phase 7A record schema is not extended; Phase 7B defines a separate
+`ML_FORECAST_RECORD_COLUMNS` contract.
+
+The model is trained on daily product-level demand and its 14 daily predictions
+are summed into one cycle total. Training on 14-day cycle totals is rejected
+because the first origin would provide nine rows for nine product levels with
+zero residual degrees of freedom. A separate model per product is rejected
+because it produces 27 fits with higher variance and the same cycle totals as a
+single global model.
+
+At forecast origin `O`, training uses every record whose date is strictly before
+`O`. The default origins of January 21, February 4, and February 18, 2025 use
+126, 252, and 378 pre-origin rows. The model is refitted independently at each
+origin so that no origin can see demand on or after its own date.
+
+The approved inputs are exactly two: the approved public product alias and the
+target calendar weekday. Both are one-hot encoded with category lists taken from
+project configuration rather than from the training data, and the first level of
+each category is dropped. No numeric scaling is applied. The estimator is
+ordinary least squares with an intercept.
+
+Ridge regression is not approved. With only three evaluation origins there is no
+leakage-safe way to select a regularization strength, the balanced complete
+training design is already full rank, and shrinkage toward a dropped reference
+category would bias exactly the between-product differences the model is meant
+to capture.
+
+`is_high_demand_day` is excluded. It is known in advance from configuration, so
+this is not a leakage decision. It is excluded because it exposes a synthetic
+generator rule, because `high_demand_days` remains provisional for five
+products, and because it would make the demonstration artificially favorable. It
+is not redundant with the additive product and weekday feature space; it is a
+function of their interaction.
+
+Phase 7B uses no lagged demand and no rolling statistics. A lag of `k` days is
+admissible across the whole target window only when `k >= 14`, and recursive
+multi-step forecasting is rejected.
+
+Each daily prediction is clipped with `max(0.0, value)` before aggregation, so
+cycle totals are nonnegative by construction. In the default run the clip never
+binds. Predictions are not rounded before evaluation.
+
+Daily predictions are an internal implementation detail. Phase 7B defines no
+daily record contract and reports no daily error metric. The official evaluation
+remains the 14-day cycle-total comparison across the baseline, the candidate,
+and the trained model.
+
+The trained model is expected to match the expanding weekday-mean candidate and
+may lose to the previous-cycle baseline. This is a valid and informative result,
+not a defect. Every training and target window in the default dataset contains
+each weekday an equal number of times, so summing 14 daily estimates returns 14
+times the product's pre-origin mean demand, which is the quantity the Phase 7A
+candidate already computes. The default model MAE is 3.462962962962963 demand
+units and the default model WAPE is 6.4795564795564795 percent, tying the
+candidate for all nine products and recording five wins and four losses against
+the baseline. No passing threshold or combined accuracy score is approved.
+
+The estimator uses no randomness, so `random_state` is not applicable. Seed 42
+remains the synthetic data generator seed and is never a model-training seed.
+Model results are compared with tolerance-based assertions rather than byte
+hashes, because least-squares output can vary in its final bits across
+platforms. The Phase 3, Phase 4A, and Phase 4B byte contracts remain unchanged.
+
+Phase 7B adds one optional dependency group, `ml`, containing
+`scikit-learn>=1.6,<2.0`. Only `src/smartstock/ml_forecasting.py` imports
+scikit-learn, so every existing module remains importable without it. No model
+binary is serialized.
+
+Phase 7B evaluates demand forecasts only. It does not replace the Phase 4B
+baseline, feed predictions into ordering, change inventory simulation, add
+optimization, add a CLI, YAML configuration, prediction CSV, dashboard, API, or
+deployment, or claim real-world performance. All results describe the small
 deterministic synthetic dataset and its configured random seed.

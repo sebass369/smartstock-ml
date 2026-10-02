@@ -10,7 +10,7 @@ This repository must use only synthetic and anonymized data. Do not add employer
 
 ## Current project status
 
-The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, Phase 5 validation hardening, a Phase 6 exploratory analysis notebook, and Phase 7A — Baseline Forecast Evaluation. Phase 7A compares a previous completed cycle baseline with an expanding weekday-mean candidate without changing valid Phase 3 through Phase 6 behavior. Neither method is a trained machine-learning model.
+The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, Phase 5 validation hardening, a Phase 6 exploratory analysis notebook, Phase 7A — Baseline Forecast Evaluation, and Phase 7B — Simple Machine Learning Model. Phase 7A compares a previous completed cycle baseline with an expanding weekday-mean candidate; neither method is a trained machine-learning model. Phase 7B adds the first trained model and compares it against both Phase 7A methods without changing valid Phase 3 through Phase 7A behavior.
 
 ## Planned repository structure
 
@@ -26,6 +26,7 @@ The project contains the Phase 1 Python foundation, Phase 2 validated configurat
 
 - Python 3.12 or newer.
 - `pytest` for development testing.
+- `scikit-learn` for the optional Phase 7B machine-learning model.
 
 ## Installation
 
@@ -40,6 +41,18 @@ notebook:
 
 ```bash
 python -m pip install -e ".[dev,analysis]"
+```
+
+Install the optional machine-learning dependencies when working with Phase 7B:
+
+```bash
+python -m pip install -e ".[dev,ml]"
+```
+
+The Phase 7B notebook needs both optional groups:
+
+```bash
+python -m pip install -e ".[dev,analysis,ml]"
 ```
 
 ## Exploring the synthetic scenarios
@@ -78,8 +91,40 @@ See [the Phase 7A forecasting design](docs/forecasting.md) and the separate
 [Phase 7A notebook](notebooks/phase_7_forecasting.ipynb). Forecast records remain
 in memory; Phase 7A adds no CLI or generated prediction CSV.
 
-Phase 7B — Simple Machine Learning Model is future work only. Phase 7A does not
-implement Ridge regression, scikit-learn, or other machine-learning behavior.
+Phase 7A itself does not implement Ridge regression, scikit-learn, or other
+machine-learning behavior. The trained model lives in the separate Phase 7B
+module and notebook.
+
+## Phase 7B — Simple Machine Learning Model
+
+Phase 7B adds the project's first trained machine-learning model. One global
+`LinearRegression` pipeline is fitted on daily synthetic demand, using only two
+leakage-safe inputs that are known on the forecast origin date: the approved
+product alias and the target calendar weekday. The model is refitted
+independently at the three approved Phase 7A origins using 126, 252, and 378
+pre-origin rows, predicts all 14 future days, clips each daily estimate at
+zero, and sums them into a cycle total.
+
+The model is compared against both Phase 7A methods on the same 27
+product-cycle records, using the existing MAE, WAPE, and tie behavior. There is
+still no passing accuracy threshold and no combined accuracy score.
+
+**The trained model is expected to match the expanding weekday-mean candidate
+and may lose to the previous-cycle baseline. This is a valid and informative
+result, not a defect.** Every training and target window in this dataset
+contains each weekday an equal number of times, so summing 14 daily estimates
+returns 14 times the product's pre-origin mean demand — which is exactly what
+the Phase 7A candidate already computes.
+
+`is_high_demand_day` is excluded. It is known in advance, so this is not a
+leakage decision: it is excluded because it exposes a synthetic generator rule,
+depends partly on provisional configuration, and would make the demonstration
+artificially favorable.
+
+See [the Phase 7B design](docs/ml_forecasting.md) and the separate
+[Phase 7B notebook](notebooks/phase_7b_machine_learning.ipynb). Records remain
+in memory; Phase 7B adds no CLI, YAML configuration, serialized model, or
+generated prediction CSV.
 
 ## Generating synthetic demand
 
@@ -143,7 +188,14 @@ that the policy is optimal or would improve real operations.
 - Generated demand is synthetic and is not operational or food-safety guidance.
 - `demand_units` is a future prediction target and must not be used to predict demand for the same row.
 - Phase 7A uses two transparent statistical forecasts. Neither method is a
-  trained machine-learning model, and Phase 7B remains future work.
+  trained machine-learning model.
+- Phase 7B trains one linear model on two calendar-known features. It is
+  expected to match the Phase 7A weekday-mean candidate and may lose to the
+  previous-cycle baseline, which is a valid result on this small synthetic
+  dataset.
+- Phase 7B results describe the configured generator and seed 42. They do not
+  establish real-world forecast accuracy, and no forecast feeds ordering,
+  inventory simulation, optimization, a dashboard, an API, or a deployment.
 - Phase 6 remains descriptive analysis only. Predictive evaluation is isolated
   in the Phase 7A module and notebook.
 - Phase 4A outcome columns describe results after demand and inventory transitions. They must not be used as same-row features in future prediction tasks.

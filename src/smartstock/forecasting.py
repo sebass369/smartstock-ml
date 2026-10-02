@@ -175,6 +175,19 @@ def forecast_cycle_with_expanding_weekday_mean(
     return max(0.0, forecast_units)
 
 
+def list_complete_forecast_origins(
+    demand_records: list[dict[str, object]],
+    product_count: int,
+    cycle_length_days: int,
+) -> list[date]:
+    """Return the eligible forecast origins with complete history and target."""
+    return _complete_forecast_origins(
+        demand_records,
+        product_count,
+        cycle_length_days,
+    )
+
+
 def validate_forecast_records(
     records: list[dict[str, object]],
     demand_records: list[dict[str, object]],

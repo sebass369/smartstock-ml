@@ -27,9 +27,28 @@ weekday-mean candidate for three complete 14-day forecast cycles. It imports the
 reusable forecasting functions, keeps forecast records in memory, and reports
 MAE, WAPE, and product-level wins, ties, and losses.
 
-Neither method is a trained machine-learning model. Phase 7B — Simple Machine
-Learning Model is future work and is not implemented in this notebook.
+Neither method is a trained machine-learning model, and this notebook does not
+implement one. The trained model is implemented separately in
+`phase_7b_machine_learning.ipynb`.
 
 The notebook is separate from Phase 6 so descriptive analysis and predictive
 evaluation retain clear boundaries. Outputs remain cleared, and all limitations
 about synthetic data and the small evaluation sample are stated in the notebook.
+
+## Phase 7B — Simple Machine Learning Model
+
+`phase_7b_machine_learning.ipynb` fits the project's first trained
+machine-learning model: one global linear regression on daily synthetic demand,
+refitted independently at the three approved Phase 7A forecast origins. It
+imports the reusable Phase 7B functions, keeps every record in memory, and
+compares the model against both Phase 7A methods using the existing MAE, WAPE,
+and tie behavior.
+
+The notebook states plainly that the trained model is expected to match the
+expanding weekday-mean candidate and may lose to the previous-cycle baseline.
+That is a valid and informative result about short, weekday-balanced synthetic
+data, not a defect.
+
+Its Colab setup clones the public repository and checks out an immutable commit
+revision rather than a mutable branch. Outputs remain cleared, and the notebook
+adds no CLI, serialized model, or prediction CSV.
