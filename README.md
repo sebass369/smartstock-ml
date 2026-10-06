@@ -1,202 +1,195 @@
 # SmartStock ML
 
-SmartStock ML is a privacy-safe Python portfolio project for studying retail inventory planning with synthetic data. The project will eventually explore demand, stockouts, waste, and 14-day ordering decisions in a clear and explainable way.
+SmartStock ML is a privacy-safe Python project that simulates inventory, evaluates
+ordering policies, and compares leakage-safe demand-forecasting methods using
+deterministic synthetic data.
 
-## Privacy statement
+[![Tests](https://github.com/sebass369/smartstock-ml/actions/workflows/tests.yml/badge.svg)](https://github.com/sebass369/smartstock-ml/actions/workflows/tests.yml)
 
-This project was inspired by common inventory-planning challenges I observed while working a part-time food-service job. All products, quantities, records, and scenarios in this repository are synthetic or represented through public aliases. The project contains no employer, store, employee, customer, vendor, or private operational data.
+**Recommended starting point — Phase 7B, the trained-model comparison:**
+[![Open Phase 7B in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sebass369/smartstock-ml/blob/main/notebooks/phase_7b_machine_learning.ipynb)
 
-This repository must use only synthetic and anonymized data. Do not add employer names, brand names, store numbers, exact locations, employee names, customer names, vendor names, private URLs, credentials, real invoices, delivery documents, screenshots, or operational records.
+Also runnable in one click — Phase 6 exploratory analysis
+[![Open Phase 6 in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sebass369/smartstock-ml/blob/main/notebooks/phase_6_exploratory_analysis.ipynb)
+and Phase 7A forecast baselines
+[![Open Phase 7A in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sebass369/smartstock-ml/blob/main/notebooks/phase_7_forecasting.ipynb)
 
-## Current project status
+## Overview
 
-The project contains the Phase 1 Python foundation, Phase 2 validated configuration, a Phase 3 deterministic synthetic-demand generator, a Phase 4A deterministic inventory simulator, a Phase 4B baseline ordering policy, Phase 5 validation hardening, a Phase 6 exploratory analysis notebook, Phase 7A — Baseline Forecast Evaluation, and Phase 7B — Simple Machine Learning Model. Phase 7A compares a previous completed cycle baseline with an expanding weekday-mean candidate; neither method is a trained machine-learning model. Phase 7B adds the first trained model and compares it against both Phase 7A methods without changing valid Phase 3 through Phase 7A behavior.
+Inventory is replenished on a fixed 14-day delivery cycle, and demand varies by
+weekday across nine anonymous product aliases. Ordering too little produces
+simulated unmet demand and stockout events. Ordering too much leaves inventory
+exposed to expiration. This repository builds a deterministic synthetic dataset
+for that situation and uses it to evaluate transparent ordering policies and
+leakage-safe demand-forecasting methods.
 
-## Planned repository structure
+Every record here is synthetic. Demand is generated from validated YAML
+configuration and a fixed random seed, and no real sales, delivery, or
+operational data is used anywhere in the project.
 
-- `src/smartstock/`: reusable Python package code.
-- `tests/`: automated tests.
-- `config/`: validated synthetic product and delivery configuration.
-- `docs/`: assumptions, privacy rules, the data dictionary, and future project decisions.
-- `notebooks/`: Google Colab demonstrations that import reusable code.
-- `data/generated/`: generated CSV files are ignored by Git while `.gitkeep` remains tracked.
-- `data/sample/`: future small privacy-safe synthetic examples.
+## How It Works
 
-## Requirements
-
-- Python 3.12 or newer.
-- `pytest` for development testing.
-- `scikit-learn` for the optional Phase 7B machine-learning model.
-
-## Installation
-
-Install the project in editable mode with development dependencies:
-
-```bash
-python -m pip install -e ".[dev]"
+```mermaid
+flowchart TD
+    subgraph pkg["Reusable Python package — src/smartstock/"]
+        direction TB
+        A["Validated YAML configuration"] --> B["Synthetic demand"]
+        B --> C["FIFO inventory simulation"]
+        C --> D["Full-pack ordering policy"]
+        B --> E["Forecast baselines"]
+        E --> F["Trained LinearRegression comparison"]
+    end
+    subgraph nb["Portfolio notebooks — notebooks/"]
+        direction TB
+        G["Phase 6 · exploratory analysis"]
+        H["Phase 7A · forecast evaluation"]
+        I["Phase 7B · trained-model comparison"]
+    end
+    C --> G
+    D --> G
+    E --> H
+    F --> I
 ```
 
-Install the optional analysis dependencies when working with the Phase 6
-notebook:
+Every rule lives in the reusable package: configuration validation, seeded
+demand generation, FIFO cohorts with expiration, full-pack rounding, the
+forecast chronology, and the model pipeline. The notebooks import that code and
+present it; they contain no business logic.
 
-```bash
-python -m pip install -e ".[dev,analysis]"
+## Key Results
+
+| Measure | Value |
+| --- | --- |
+| Simulated days | 56 |
+| Approved anonymous product aliases | 9 |
+| Synthetic daily demand records | 504 |
+| Chronological forecast origins | 3 |
+| Product-cycle forecast records | 27 |
+| Previous-cycle baseline — MAE / WAPE | 3.4074074074074074 demand units / 6.375606375606376 percent |
+| Expanding weekday-mean candidate — MAE / WAPE | 3.462962962962963 demand units / 6.4795564795564795 percent |
+| Trained LinearRegression — MAE / WAPE | 3.462962962962963 demand units / 6.4795564795564795 percent |
+| LinearRegression vs. weekday-mean candidate | 0 wins / 9 ties / 0 losses — an exact tie for every product |
+| LinearRegression vs. previous-cycle baseline | 5 wins / 0 ties / 4 losses per product; loses on aggregate MAE |
+| Fixed delivery scenario | 0 unmet demand units, 0 stockout events, 0 waste units |
+| Baseline ordering-policy scenario | 36 unmet demand units, 12 stockout events, 0 waste units |
+
+The trained model does not beat the naive previous-cycle baseline on aggregate
+MAE, and it reproduces the weekday-mean candidate exactly. That negative result
+is intentional and informative rather than a defect: every training and target
+window in this dataset contains each weekday an equal number of times, so
+summing 14 daily least-squares estimates returns 14 times a product's
+pre-origin mean demand, which is precisely what the weekday-mean candidate
+already computes. What the comparison demonstrates is a correct chronological
+evaluation — refitting at each origin, an executable leakage boundary, and
+identical evaluation records for all three methods — rather than an exaggerated
+machine-learning claim.
+
+The two ordering scenarios are reported side by side as a tradeoff, not a
+ranking. The policy scenario orders fewer units and holds less ending inventory,
+and it also produces more unmet demand and more stockout events than the fixed
+scenario.
+
+Default expiration and waste are zero in both scenarios because the 56-day
+horizon is shorter than every configured unopened shelf life and starting
+inventory is fresh. Focused tests use shortened synthetic shelf lives to verify
+the expiration boundary. No reduction in waste is claimed or demonstrated.
+
+## Try It
+
+The fastest path needs nothing installed. Open the
+[Phase 7B notebook in Colab](https://colab.research.google.com/github/sebass369/smartstock-ml/blob/main/notebooks/phase_7b_machine_learning.ipynb),
+select a fresh runtime, and run all cells. No credentials, uploads, Google Drive
+connection, or external dataset is required.
+
+To run everything locally, including the test suite:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,analysis,ml]"
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Install the optional machine-learning dependencies when working with Phase 7B:
+Smaller installs exist if you need only part of the project: `.[dev]` for the
+tests, `.[dev,analysis]` for the Phase 6 and Phase 7A notebooks, and
+`.[dev,ml]` for the Phase 7B model.
 
-```bash
-python -m pip install -e ".[dev,ml]"
-```
+## Notebooks
 
-The Phase 7B notebook needs both optional groups:
+- **Phase 7B — trained-model comparison (recommended first notebook):**
+  [`notebooks/phase_7b_machine_learning.ipynb`](notebooks/phase_7b_machine_learning.ipynb)
+  · [open in Colab](https://colab.research.google.com/github/sebass369/smartstock-ml/blob/main/notebooks/phase_7b_machine_learning.ipynb)
+- **Phase 7A — baseline forecast evaluation:**
+  [`notebooks/phase_7_forecasting.ipynb`](notebooks/phase_7_forecasting.ipynb)
+  · [open in Colab](https://colab.research.google.com/github/sebass369/smartstock-ml/blob/main/notebooks/phase_7_forecasting.ipynb)
+- **Phase 6 — exploratory analysis:**
+  [`notebooks/phase_6_exploratory_analysis.ipynb`](notebooks/phase_6_exploratory_analysis.ipynb)
+  · [open in Colab](https://colab.research.google.com/github/sebass369/smartstock-ml/blob/main/notebooks/phase_6_exploratory_analysis.ipynb)
 
-```bash
-python -m pip install -e ".[dev,analysis,ml]"
-```
+## Repository Structure
 
-## Exploring the synthetic scenarios
+| Path | Contents |
+| --- | --- |
+| `src/smartstock/` | Reusable package: configuration, generator, inventory, ordering, forecasting, model |
+| `tests/` | Automated test suite |
+| `config/` | Validated synthetic product, delivery, generation, inventory, and ordering settings — [index](config/README.md) |
+| `docs/` | Technical contracts, data dictionary, and design decisions — [index](docs/README.md) |
+| `notebooks/` | Colab demonstrations that import the package — [index](notebooks/README.md) |
+| `data/` | Generated and sample directories; generated CSV files are ignored by Git — [index](data/README.md) |
 
-Open the [Phase 6 exploratory analysis notebook](notebooks/phase_6_exploratory_analysis.ipynb)
-in Google Colab. The notebook loads validated configuration, generates all
-records in memory with seed 42, and compares the fixed and baseline-policy
-inventory scenarios. It does not require generated CSV files, private uploads,
-or Google Drive access.
+The full project specification lives in [`PROJECT.md`](PROJECT.md).
 
-The notebook is committed without saved outputs. All displayed values and
-charts are synthetic and do not demonstrate optimal ordering or real-world
-operational performance.
+## Engineering and Reproducibility
 
-## Running tests
+- Synthetic demand is generated with a local seeded generator. The default seed
+  is `42`, and it is never a model-training seed.
+- Forecasts are evaluated chronologically. The model is refitted independently at
+  each of the three origins on 126, 252, and 378 strictly pre-origin rows, and
+  `training_row_count` is re-derived during validation as an executable leakage
+  audit.
+- Model features are limited to two values known on the forecast origin date:
+  the product alias and the target calendar weekday.
+- Three golden SHA-256 anchors pin the Phase 3, Phase 4A, and Phase 4B CSV byte
+  contracts against regression.
+- GitHub Actions runs the full suite on Python 3.12 with read-only permissions,
+  rejects tracked generated CSV files, and fails if tracked files change.
+- 399 automated tests cover configuration, generation,
+  inventory, ordering, forecasting, the model, notebook structure, and this
+  README contract.
+- The Phase 6 and Phase 7B notebooks pin immutable commit revisions for their
+  Colab runs. Phase 7A intentionally tracks `main`.
+- No generated dataset, serialized model, screenshot, or notebook output is
+  tracked in Git.
 
-Run the test suite with:
+## Privacy
 
-```bash
-python -m pytest -q
-```
+All data is synthetic and limited to exactly nine anonymous product aliases. The
+repository contains no employer, company, brand, store, employee, manager,
+customer, or vendor identifier, no location or store number, and no real sales,
+invoice, delivery, or other operational record. It contains no credentials,
+tokens, private URLs, uploads, or screenshots. Donut products and donut waste
+are excluded from Version 1.
 
-## Phase 7A — Baseline Forecast Evaluation
+## Limitations
 
-Phase 7A creates in-memory forecasts for each approved product at the three
-delivery dates after the first 14-day warm-up cycle. Each record predicts total
-synthetic demand for the next complete 14-day cycle.
+- The dataset contains only 56 synthetic days.
+- Evaluation uses only 3 forecast origins and 27 product-cycle records.
+- `LinearRegression` on two calendar-known features is intentionally simple.
+- Synthetic performance cannot establish real-world forecast accuracy, business
+  impact, or operational benefit, and none is claimed.
+- Default expiration and waste behavior is limited by the short simulation
+  horizon, so the expiration path is exercised mainly by focused tests.
+- The ordering-policy scenario demonstrates a stockout-versus-inventory tradeoff
+  rather than an optimization result.
 
-The naive baseline uses the previous completed cycle. The candidate sums
-expanding historical weekday means. Both methods use only demand observed before
-the forecast origin. Evaluation reports MAE in demand units, WAPE as a percentage,
-and product-level candidate wins, ties, and losses. There is no passing accuracy
-threshold and no combined accuracy score.
+## Roadmap
 
-See [the Phase 7A forecasting design](docs/forecasting.md) and the separate
-[Phase 7A notebook](notebooks/phase_7_forecasting.ipynb). Forecast records remain
-in memory; Phase 7A adds no CLI or generated prediction CSV.
+- **Phase 8A — portfolio presentation.** Documentation, navigation, and
+  discoverability only, with no change to analytical behavior.
+- **Phase 8B — optional hosted, read-only dashboard.** Not implemented and not
+  required.
+- **Version 2 — separately approved future scope.** Any new product or data
+  source needs its own approval.
 
-Phase 7A itself does not implement Ridge regression, scikit-learn, or other
-machine-learning behavior. The trained model lives in the separate Phase 7B
-module and notebook.
+## License
 
-## Phase 7B — Simple Machine Learning Model
-
-Phase 7B adds the project's first trained machine-learning model. One global
-`LinearRegression` pipeline is fitted on daily synthetic demand, using only two
-leakage-safe inputs that are known on the forecast origin date: the approved
-product alias and the target calendar weekday. The model is refitted
-independently at the three approved Phase 7A origins using 126, 252, and 378
-pre-origin rows, predicts all 14 future days, clips each daily estimate at
-zero, and sums them into a cycle total.
-
-The model is compared against both Phase 7A methods on the same 27
-product-cycle records, using the existing MAE, WAPE, and tie behavior. There is
-still no passing accuracy threshold and no combined accuracy score.
-
-**The trained model is expected to match the expanding weekday-mean candidate
-and may lose to the previous-cycle baseline. This is a valid and informative
-result, not a defect.** Every training and target window in this dataset
-contains each weekday an equal number of times, so summing 14 daily estimates
-returns 14 times the product's pre-origin mean demand — which is exactly what
-the Phase 7A candidate already computes.
-
-`is_high_demand_day` is excluded. It is known in advance, so this is not a
-leakage decision: it is excluded because it exposes a synthetic generator rule,
-depends partly on provisional configuration, and would make the demonstration
-artificially favorable.
-
-See [the Phase 7B design](docs/ml_forecasting.md) and the separate
-[Phase 7B notebook](notebooks/phase_7b_machine_learning.ipynb). Records remain
-in memory; Phase 7B adds no CLI, YAML configuration, serialized model, or
-generated prediction CSV.
-
-## Generating synthetic demand
-
-Run the generator from the repository root after installation:
-
-```bash
-python -m smartstock.generator
-```
-
-The default command writes `data/generated/synthetic_daily_records.csv`. It produces 504 rows from 56 synthetic dates and nine approved product aliases. The CSV columns are `date`, `weekday`, `product_id`, `is_high_demand_day`, `demand_units`, and `delivery_event`.
-
-Demand uses a local seeded random generator. Low demand is an inclusive integer from 0 through 2, and high demand is an inclusive integer from 3 through 6. One unit is added on a product's configured high-demand weekdays. The default seed is 42 and can be replaced with `--seed`.
-
-Phase 3 supports only `low` and `high` demand levels. `medium` is unsupported, and a product with `demand_level: unknown` cannot be processed by the Phase 3 generator. The broader Phase 2 configuration validator may retain `unknown` for incomplete or future configuration.
-
-A delivery event marks the first date and each 14-day Tuesday cycle. It does not represent inventory or a delivery quantity.
-
-## Simulating synthetic inventory
-
-Run the separate Phase 4A CLI from the repository root:
-
-```bash
-python -m smartstock.inventory
-```
-
-The default command writes `data/generated/synthetic_inventory_records.csv`. It generates Phase 3 demand in memory, applies the fixed synthetic values in `config/inventory.yaml`, and produces 504 deterministic records. Use `--seed` to override the demand seed or `--output` to choose another path.
-
-Inventory uses FIFO cohorts. Carried cohorts expire before demand, scheduled deliveries are then added and are usable that date, and demand consumes the oldest usable units first. Only unopened shelf life is used. Fixed delivery pack counts are scenario inputs, not recommendations.
-
-The default 56-day run has zero expiration and waste because every approved unopened shelf life is at least 60 days and starting inventory is fresh. Focused tests use shorter synthetic shelf lives to verify expiration boundaries.
-
-Python 3.12 is the project baseline. Phase 3 is also verified with Python 3.13 when that interpreter is available.
-
-## Generating baseline order recommendations
-
-Run the separate Phase 4B CLI from the repository root:
-
-```bash
-python -m smartstock.ordering
-```
-
-The default command writes `data/generated/synthetic_order_recommendations.csv`.
-It produces 27 deterministic records for the three eligible delivery dates after
-the first 14-day warm-up cycle. Use `--seed` to override the demand seed or
-`--output` to select another path.
-
-The recommendation checkpoint occurs after same-day expiration and before
-delivery and demand. The baseline sums `demand_units` from the previous 14
-completed dates. Current-day and future demand are excluded. Default safety stock
-is zero. Current cohorts expiring before the next delivery receive no inventory
-credit, and positive unit requirements are rounded up to full packs.
-
-The CLI also prints an in-memory comparison between the unchanged fixed Phase 4A
-scenario and the policy scenario from day 14 onward. The comparison reports
-fulfilled demand, unmet demand, stockout events, waste, ending inventory, and
-delivered units and packs. It describes one synthetic scenario and does not show
-that the policy is optimal or would improve real operations.
-
-## Current limitations
-
-- Generated demand is synthetic and is not operational or food-safety guidance.
-- `demand_units` is a future prediction target and must not be used to predict demand for the same row.
-- Phase 7A uses two transparent statistical forecasts. Neither method is a
-  trained machine-learning model.
-- Phase 7B trains one linear model on two calendar-known features. It is
-  expected to match the Phase 7A weekday-mean candidate and may lose to the
-  previous-cycle baseline, which is a valid result on this small synthetic
-  dataset.
-- Phase 7B results describe the configured generator and seed 42. They do not
-  establish real-world forecast accuracy, and no forecast feeds ordering,
-  inventory simulation, optimization, a dashboard, an API, or a deployment.
-- Phase 6 remains descriptive analysis only. Predictive evaluation is isolated
-  in the Phase 7A module and notebook.
-- Phase 4A outcome columns describe results after demand and inventory transitions. They must not be used as same-row features in future prediction tasks.
-- Phase 4B uses a synthetic zero-day lead time and a conservative expiration-credit rule. These assumptions are transparent simplifications, not operational guidance.
+Released under the [MIT License](LICENSE).
