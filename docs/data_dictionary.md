@@ -1,4 +1,4 @@
-# Phase 3 and Phase 4A Data Dictionary
+# Phase 3 through Phase 4B Data Dictionary
 
 ## Purpose and boundary
 

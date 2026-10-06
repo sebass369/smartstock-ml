@@ -2,6 +2,10 @@
 
 This directory contains project assumptions, privacy rules, the Phase 3 through Phase 4B data dictionary, and project decisions.
 
+The root [README](../README.md) presents the headline results and the
+fastest way to run the project. This directory holds the detailed technical
+contracts behind those results.
+
 `data_dictionary.md` documents the deterministic synthetic-demand, inventory, and recommendation CSV contracts, reproducibility rules, privacy limits, and leakage boundaries.
 
 `ordering_policy.md` explains the Phase 4B recommendation timing, formulas,
