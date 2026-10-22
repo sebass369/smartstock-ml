@@ -65,13 +65,24 @@ present it; they contain no business logic.
 | Synthetic daily demand records | 504 |
 | Chronological forecast origins | 3 |
 | Product-cycle forecast records | 27 |
-| Previous-cycle baseline — MAE / WAPE | 3.4074074074074074 demand units / 6.375606375606376 percent |
-| Expanding weekday-mean candidate — MAE / WAPE | 3.462962962962963 demand units / 6.4795564795564795 percent |
-| Trained LinearRegression — MAE / WAPE | 3.462962962962963 demand units / 6.4795564795564795 percent |
+| Previous-cycle baseline — MAE / WAPE | 3.41 demand units / 6.38 percent |
+| Expanding weekday-mean candidate — MAE / WAPE | 3.46 demand units / 6.48 percent |
+| Trained LinearRegression — MAE / WAPE | 3.46 demand units / 6.48 percent |
 | LinearRegression vs. weekday-mean candidate | 0 wins / 9 ties / 0 losses — an exact tie for every product |
 | LinearRegression vs. previous-cycle baseline | 5 wins / 0 ties / 4 losses per product; loses on aggregate MAE |
 | Fixed delivery scenario | 0 unmet demand units, 0 stockout events, 0 waste units |
 | Baseline ordering-policy scenario | 36 unmet demand units, 12 stockout events, 0 waste units |
+
+Error metrics in this table are rounded to two decimals for readability. The
+exact full-precision values are recorded in
+[`docs/ml_forecasting.md`](docs/ml_forecasting.md) and asserted by the test
+suite; the underlying calculations are unrounded.
+
+![Horizontal bar chart titled 14-Day Cycle Forecast MAE. Lower is better. The previous-cycle baseline scores 3.41 demand units, the expanding weekday mean scores 3.46, and the trained linear regression scores 3.46. The weekday mean and the linear regression are tied, and the previous-cycle baseline has the lowest error.](docs/assets/forecast_mae_comparison.svg)
+
+The trained model matched the expanding weekday-mean method exactly and did not
+beat the previous-cycle baseline. Lower bars are better, so the shortest bar —
+the naive baseline — is the most accurate method in this synthetic run.
 
 The trained model does not beat the naive previous-cycle baseline on aggregate
 MAE, and it reproduces the weekday-mean candidate exactly. That negative result
@@ -79,7 +90,10 @@ is intentional and informative rather than a defect: every training and target
 window in this dataset contains each weekday an equal number of times, so
 summing 14 daily least-squares estimates returns 14 times a product's
 pre-origin mean demand, which is precisely what the weekday-mean candidate
-already computes. What the comparison demonstrates is a correct chronological
+already computes. The generator's weekday signal is also a product-by-weekday
+interaction, which an additive product-plus-weekday model cannot fully
+represent; [`docs/ml_forecasting.md`](docs/ml_forecasting.md) works through both
+causes. What the comparison demonstrates is a correct chronological
 evaluation — refitting at each origin, an executable leakage boundary, and
 identical evaluation records for all three methods — rather than an exaggerated
 machine-learning claim.
@@ -152,9 +166,9 @@ The full project specification lives in [`PROJECT.md`](PROJECT.md).
   contracts against regression.
 - GitHub Actions runs the full suite on Python 3.12 with read-only permissions,
   rejects tracked generated CSV files, and fails if tracked files change.
-- 399 automated tests cover configuration, generation,
-  inventory, ordering, forecasting, the model, notebook structure, and this
-  README contract.
+- 406 automated tests cover configuration, generation,
+  inventory, ordering, forecasting, the model, notebook structure, the published
+  result chart, and this README contract.
 - The Phase 6 and Phase 7B notebooks pin immutable commit revisions for their
   Colab runs. Phase 7A intentionally tracks `main`.
 - No generated dataset, serialized model, screenshot, or notebook output is
