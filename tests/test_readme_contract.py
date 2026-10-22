@@ -9,12 +9,33 @@ without breaking the suite.
 import json
 from pathlib import Path
 import re
+import xml.etree.ElementTree as ElementTree
 
 from smartstock.config import APPROVED_PRODUCT_IDS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 README_PATH = PROJECT_ROOT / "README.md"
 NOTEBOOK_DIRECTORY = PROJECT_ROOT / "notebooks"
+CHART_RELATIVE_PATH = "docs/assets/forecast_mae_comparison.svg"
+CHART_PATH = PROJECT_ROOT / "docs" / "assets" / "forecast_mae_comparison.svg"
+SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+
+# Displayed values only. The exact metrics stay in docs/ and the ML test suite.
+ROUNDED_METRIC_VALUES = ("3.41", "6.38", "3.46", "6.48")
+FULL_PRECISION_METRIC_VALUES = (
+    "3.4074074074074074",
+    "6.375606375606376",
+    "3.462962962962963",
+    "6.4795564795564795",
+)
+REQUIRED_CHART_LABELS = (
+    "14-Day Cycle Forecast MAE",
+    "Lower is better",
+    "27 synthetic product-cycle records",
+    "Previous-cycle baseline",
+    "Expanding weekday mean",
+    "Linear regression",
+)
 
 REQUIRED_README_HEADINGS = (
     "# SmartStock ML",
@@ -213,3 +234,94 @@ def test_repository_has_an_mit_license_file() -> None:
 
     assert "MIT License" in license_text
     assert "Sebastian Siles" in license_text
+
+
+def _chart_text_content() -> str:
+    root = ElementTree.parse(CHART_PATH).getroot()
+    return "\n".join(
+        element.text for element in root.iter() if element.text is not None
+    )
+
+
+def test_readme_rounds_the_headline_error_metrics_for_display() -> None:
+    readme = _readme_text()
+
+    for rounded_value in ROUNDED_METRIC_VALUES:
+        assert rounded_value in readme, f"README should display {rounded_value}."
+    for exact_value in FULL_PRECISION_METRIC_VALUES:
+        assert exact_value not in readme, (
+            f"README should not display the exact value {exact_value}."
+        )
+    assert "rounded to two decimals" in readme
+    assert "docs/ml_forecasting.md" in readme
+
+
+def test_full_precision_metrics_remain_in_the_technical_documentation() -> None:
+    ml_documentation = (PROJECT_ROOT / "docs" / "ml_forecasting.md").read_text(
+        encoding="utf-8"
+    )
+
+    for exact_value in FULL_PRECISION_METRIC_VALUES:
+        assert exact_value in ml_documentation, (
+            f"docs/ml_forecasting.md lost the exact value {exact_value}."
+        )
+
+
+def test_readme_embeds_the_local_forecast_chart() -> None:
+    readme = _readme_text()
+
+    assert CHART_PATH.is_file(), "The forecast chart asset is missing."
+    alt_text_match = re.search(
+        rf"!\[([^\]]+)\]\({re.escape(CHART_RELATIVE_PATH)}\)",
+        readme,
+    )
+    assert alt_text_match is not None, (
+        "The README must embed the local chart as an image with alt text."
+    )
+    assert len(alt_text_match.group(1)) >= 80, "Alt text should be descriptive."
+
+
+def test_forecast_chart_is_valid_svg_with_its_required_labels() -> None:
+    root = ElementTree.parse(CHART_PATH).getroot()
+
+    assert root.tag == f"{{{SVG_NAMESPACE}}}svg"
+    assert root.get("role") == "img"
+    assert root.find(f"{{{SVG_NAMESPACE}}}title") is not None
+    assert root.find(f"{{{SVG_NAMESPACE}}}desc") is not None
+
+    chart_text = _chart_text_content()
+    for label in REQUIRED_CHART_LABELS:
+        assert label in chart_text, f"The chart is missing the label: {label}."
+    for displayed_value in ("3.41", "3.46"):
+        assert displayed_value in chart_text
+
+
+def test_forecast_chart_has_no_external_or_executable_content() -> None:
+    chart_markup = CHART_PATH.read_text(encoding="utf-8")
+    without_namespace = chart_markup.replace(SVG_NAMESPACE, "")
+
+    assert "http://" not in without_namespace
+    assert "https://" not in without_namespace
+    for forbidden in ("<script", "<image", "<foreignObject", "href", "@import"):
+        assert forbidden not in chart_markup, (
+            f"The chart must not contain {forbidden}."
+        )
+
+
+def test_forecast_chart_does_not_imply_the_trained_model_won() -> None:
+    root = ElementTree.parse(CHART_PATH).getroot()
+    bar_widths = [
+        float(element.get("width"))
+        for element in root.iter(f"{{{SVG_NAMESPACE}}}rect")
+        if element.get("height") == "26"
+    ]
+    chart_text = _chart_text_content()
+
+    assert len(bar_widths) == 3, "The chart should show exactly three bars."
+    baseline_width, candidate_width, model_width = bar_widths
+    assert baseline_width < model_width, (
+        "Lower is better, so the baseline bar must be the shortest."
+    )
+    assert candidate_width == model_width, "The tied methods must match exactly."
+    assert "did not beat the previous-cycle baseline" in chart_text
+    assert "Lower is better" in chart_text

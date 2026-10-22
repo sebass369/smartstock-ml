@@ -65,8 +65,12 @@ the expanding history the Phase 7A candidate is allowed to use.
 
 `build_training_rows` accepts the **complete** demand dataset and filters it
 with `record_date < forecast_origin_date`. The presence of later records is
-expected and is never a reason to reject the dataset. Every returned training
-row is then validated as strictly pre-origin.
+expected and is never a reason to reject the dataset. A record dated on or after
+the origin is skipped before it can be appended, so every returned row is
+strictly pre-origin by construction. The executable audit of that boundary is
+`validate_ml_forecast_records`, which independently re-derives the expected
+`training_row_count` from the origin and the first dataset date and rejects any
+mismatch.
 
 ## Feature contract
 
@@ -228,6 +232,42 @@ The useful conclusion is that a trained model does not beat a well-chosen naive
 baseline on a short, stationary, weekday-balanced synthetic series. The value of
 Phase 7B is the walk-forward protocol, the executable leakage boundary, the
 reproducible pipeline, the test suite, and this honest negative result.
+
+### Why this model cannot do better on this dataset
+
+The balanced-window argument above explains the exact tie with the candidate.
+Two further structural facts explain why no better result was available to this
+model, independently of the random seed. Neither is data leakage, and neither is
+a software defect; both are consequences of approved design choices.
+
+**1. The generator's weekday signal is a `product x weekday` interaction, and
+the model is additive.** `generate_daily_records` computes
+`demand_units = randint(range) + high_demand_day_adjustment` exactly when the
+target weekday appears in that product's own `high_demand_days` list. The
+adjustment is therefore product-specific: Monday is a high-demand weekday for
+`Milk_Product_A` but an ordinary weekday for `Fruit_Refresher_A`. The Phase 7B
+feature space is additive — a product main effect plus a weekday main effect,
+with no interaction term — so a single shared weekday coefficient must serve
+every product at once. An additive model cannot fully represent a
+product-specific weekday pattern. This is the same structural fact recorded
+above as the reason `is_high_demand_day` is not redundant with the
+`product_id + weekday` feature space, stated here from the opposite direction.
+
+**2. Aggregating to a 14-day total neutralizes weekday composition.** Every
+target cycle is exactly two calendar weeks, so it contains each weekday exactly
+twice. Whatever weekday coefficients are fitted, the 14 daily estimates are
+summed over a window whose weekday composition is identical for every origin and
+every product. Differences in weekday composition — the only thing a weekday
+feature can express — cancel in the total. A cycle-total metric is therefore
+blind to the weekday structure by construction, before any model is fitted.
+
+Taken together: the one pattern in the data is an interaction the additive model
+cannot capture, and the reporting granularity would hide that pattern even if
+the model did capture it. Phase 7B consequently demonstrates a leakage-safe
+chronological machine-learning protocol — expanding-window refits, an
+executable leakage boundary, a frozen record contract, and a fair three-method
+comparison — rather than predictive improvement. That is the approved scope of
+this phase, and the measured outcome is reported without adjustment.
 
 ## Record contract
 

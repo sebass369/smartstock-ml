@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" width="760" height="330" role="img" aria-labelledby="chartTitle chartDesc" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <title id="chartTitle">14-Day Cycle Forecast MAE</title>
+  <desc id="chartDesc">Horizontal bar chart of mean absolute error in demand units for three forecasting methods on 27 synthetic product-cycle records. Lower is better. Previous-cycle baseline 3.41. Expanding weekday mean 3.46. Linear regression 3.46. The expanding weekday mean and the linear regression are tied. The previous-cycle baseline has the lowest error.</desc>
+
+  <rect x="0" y="0" width="760" height="330" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+
+  <text x="28" y="40" font-size="21" font-weight="600" fill="#1f2328">14-Day Cycle Forecast MAE</text>
+  <text x="28" y="63" font-size="13.5" fill="#424a53">Lower is better — mean absolute error in demand units</text>
+  <text x="28" y="83" font-size="12.5" fill="#57606a">27 synthetic product-cycle records · 3 chronological forecast origins · generator seed 42</text>
+
+  <!-- gridlines and axis ticks, 0 to 4 demand units -->
+  <g stroke="#e4e8ed" stroke-width="1">
+    <line x1="268" y1="100" x2="268" y2="258"/>
+    <line x1="368" y1="100" x2="368" y2="258"/>
+    <line x1="468" y1="100" x2="468" y2="258"/>
+    <line x1="568" y1="100" x2="568" y2="258"/>
+    <line x1="668" y1="100" x2="668" y2="258"/>
+  </g>
+  <g font-size="11.5" fill="#57606a" text-anchor="middle">
+    <text x="268" y="275">0</text>
+    <text x="368" y="275">1</text>
+    <text x="468" y="275">2</text>
+    <text x="568" y="275">3</text>
+    <text x="668" y="275">4</text>
+  </g>
+  <line x1="268" y1="100" x2="268" y2="258" stroke="#8c959f" stroke-width="1.5"/>
+
+  <!-- previous-cycle baseline: 3.41 demand units, lowest error in this run -->
+  <text x="252" y="126" font-size="13" fill="#1f2328" text-anchor="end">Previous-cycle baseline</text>
+  <rect x="268" y="110" width="341" height="26" fill="#1a7f37"/>
+  <text x="619" y="126" font-size="13" font-weight="600" fill="#1f2328">3.41</text>
+  <text x="252" y="143" font-size="11" fill="#57606a" text-anchor="end">naive, not trained</text>
+
+  <!-- expanding weekday mean: 3.46 demand units -->
+  <text x="252" y="181" font-size="13" fill="#1f2328" text-anchor="end">Expanding weekday mean</text>
+  <rect x="268" y="165" width="346" height="26" fill="#4a5c70"/>
+  <text x="624" y="181" font-size="13" font-weight="600" fill="#1f2328">3.46</text>
+  <text x="252" y="198" font-size="11" fill="#57606a" text-anchor="end">statistical candidate</text>
+
+  <!-- linear regression: 3.46 demand units, identical to the weekday mean -->
+  <text x="252" y="236" font-size="13" fill="#1f2328" text-anchor="end">Linear regression</text>
+  <rect x="268" y="220" width="346" height="26" fill="#4a5c70"/>
+  <text x="624" y="236" font-size="13" font-weight="600" fill="#1f2328">3.46</text>
+  <text x="252" y="253" font-size="11" fill="#57606a" text-anchor="end">trained model</text>
+
+  <!-- tie bracket joining the two identical results -->
+  <path d="M 648 165 L 660 165 L 660 246 L 648 246" fill="none" stroke="#8c959f" stroke-width="1.2"/>
+  <text x="666" y="209" font-size="11.5" fill="#424a53">tie</text>
+
+  <text x="28" y="302" font-size="12" fill="#424a53">The trained model matched the expanding weekday mean exactly and did not beat the previous-cycle baseline.</text>
+  <text x="28" y="319" font-size="12" fill="#57606a">Synthetic data only. Values are rounded to two decimals for display. No real-world accuracy is claimed.</text>
+</svg>

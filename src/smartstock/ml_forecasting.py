@@ -87,7 +87,6 @@ def build_training_rows(
     if not isinstance(forecast_origin_date, date):
         raise ValueError("forecast_origin_date must be a date.")
 
-    selected_dates: list[date] = []
     training_rows: list[dict[str, object]] = []
     for record in demand_records:
         if not isinstance(record, dict):
@@ -100,9 +99,13 @@ def build_training_rows(
             record.get("demand_units"),
             "demand_units",
         )
+        # The leakage boundary. A record dated on or after the origin is
+        # skipped here and never reaches training_rows, so every returned row
+        # is strictly pre-origin by construction. validate_ml_forecast_records
+        # re-derives the expected row count independently as the executable
+        # audit of this boundary.
         if record_date >= forecast_origin_date:
             continue
-        selected_dates.append(record_date)
         training_rows.append(
             {
                 "product_id": product_id,
@@ -111,8 +114,6 @@ def build_training_rows(
             }
         )
 
-    if selected_dates and max(selected_dates) >= forecast_origin_date:
-        raise ValueError("Training rows must be strictly before the forecast origin.")
     return training_rows
 
 

@@ -130,6 +130,28 @@ def test_every_training_row_is_strictly_before_the_forecast_origin(demand_record
     assert sum(row["demand_units"] for row in rows) == expected_total
 
 
+def test_build_training_rows_ignores_every_record_on_or_after_the_origin(
+    demand_records,
+):
+    """Prove the pre-origin filter directly by mutating the excluded slice.
+
+    build_training_rows returns product, weekday, and demand only, so the
+    selected dates cannot be asserted from the output. Rewriting every record
+    dated on or after the origin and observing an unchanged result shows that
+    no such record reaches the training rows.
+    """
+    expected = build_training_rows(demand_records, FIRST_ORIGIN)
+    mutated = deepcopy(demand_records)
+    mutated_count = 0
+    for record in mutated:
+        if record["date"] >= FIRST_ORIGIN.isoformat():
+            record["demand_units"] = 999
+            mutated_count += 1
+
+    assert mutated_count == 504 - 126
+    assert build_training_rows(mutated, FIRST_ORIGIN) == expected
+
+
 def test_build_training_rows_returns_expected_row_counts_for_each_origin(
     demand_records,
 ):
